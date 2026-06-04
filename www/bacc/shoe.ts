@@ -1,37 +1,14 @@
 import { BaccaratGameEngine } from "baccarat-engine"
+import { toCardInt, handValue } from "./kev"
+import { Round } from "./round"
 
-export interface GameCard {
-  suit: string
-  value: string
-}
-
-export function isPaint(card: GameCard): boolean {
-  return card.value === "J" || card.value === "Q" || card.value === "K"
-}
-
-export function cardBaccaratValue(card: GameCard): number {
-  if (card.value === "A") return 1
-  const n = parseInt(card.value, 10)
-  if (!isNaN(n)) return n >= 10 ? 0 : n
-  return 0
-}
-
-export interface Round {
-  outcome: "player" | "banker" | "tie"
-  playerValue: number
-  bankerValue: number
-  winnerValue: number
-  playerPair: boolean
-  bankerPair: boolean
-  playerDrewThird: boolean
-  bankerDrewThird: boolean
-  playerCards: GameCard[]
-  bankerCards: GameCard[]
-}
+export { Round } from "./round"
 
 export class BaccaratShoe {
   private engine: BaccaratGameEngine
   private cutAt: number
+  private _isExhausted = false
+  private _cutConsumed = false
 
   constructor(numDecks = 8, penetration = 0.75) {
     this.engine = new BaccaratGameEngine()
@@ -43,23 +20,36 @@ export class BaccaratShoe {
   }
 
   get isExhausted(): boolean {
-    return this.engine.shoe.cardsLeft <= this.cutAt
+    return this._isExhausted
   }
 
   next(): Round | null {
-    if (this.isExhausted) return null
+    if (this._isExhausted) return null
+
+    const cardsBeforeRound = this.engine.shoe.cardsLeft
+    let cutCardIndex: number | null = null
+
+    if (cardsBeforeRound <= this.cutAt) {
+      this._isExhausted = true
+      if (!this._cutConsumed) cutCardIndex = 0
+    }
 
     const hand = this.engine.dealGame()
     const re = this.engine.resultsEngine
     const result = re.calculateGameResult(hand)
-    const playerValue = re.calculateHandValue(hand.playerCards)
-    const bankerValue = re.calculateHandValue(hand.bankerCards)
+    const playerCardInts = hand.playerCards.map((c: any) => toCardInt(c.suit, c.value))
+    const bankerCardInts = hand.bankerCards.map((c: any) => toCardInt(c.suit, c.value))
+    const playerValue = handValue(playerCardInts)
+    const bankerValue = handValue(bankerCardInts)
     const outcome = result.outcome as "player" | "banker" | "tie"
-    // for a tie both values are equal; use playerValue as the common hand value
-    const winnerValue =
-      outcome === "player" ? playerValue
-      : outcome === "banker" ? bankerValue
-      : playerValue
+    const winnerValue = outcome === "player" ? playerValue : outcome === "banker" ? bankerValue : playerValue
+    const playerDrewThird = hand.playerCards.length === 3
+    const bankerDrewThird = hand.bankerCards.length === 3
+
+    if (!this._cutConsumed && cardsBeforeRound > this.cutAt && this.engine.shoe.cardsLeft <= this.cutAt) {
+      cutCardIndex = cardsBeforeRound - this.cutAt - 1
+      this._cutConsumed = true
+    }
 
     return {
       outcome,
@@ -68,10 +58,12 @@ export class BaccaratShoe {
       winnerValue,
       playerPair: result.pair === "player" || result.pair === "both",
       bankerPair: result.pair === "banker" || result.pair === "both",
-      playerDrewThird: hand.playerCards.length === 3,
-      bankerDrewThird: hand.bankerCards.length === 3,
-      playerCards: hand.playerCards as GameCard[],
-      bankerCards: hand.bankerCards as GameCard[],
+      playerDrewThird,
+      bankerDrewThird,
+      isForcedThird: playerDrewThird && bankerDrewThird && handValue(bankerCardInts.slice(0, 2)) <= 2,
+      cutCardIndex,
+      playerCards: playerCardInts,
+      bankerCards: bankerCardInts,
     }
   }
 
@@ -82,5 +74,7 @@ export class BaccaratShoe {
     this.engine.shoe.shuffle()
     this.cutAt = Math.floor(numDecks * 52 * (1 - penetration))
     this.engine.burnCards()
+    this._isExhausted = false
+    this._cutConsumed = false
   }
 }

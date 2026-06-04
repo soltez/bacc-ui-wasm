@@ -70,13 +70,29 @@ Start the server:
 # Listening on http://0.0.0.0:3000
 ```
 
-The server exposes one endpoint:
+The server exposes two endpoints:
+
+```
+POST /round/next
+```
+
+Advances the shoe by one hand and returns the round details:
+
+```json
+{
+  "encoded":         123456,
+  "is_forced_third": false,
+  "cut_card_index":  null,
+  "player_cards":    [268471337, 134253349],
+  "banker_cards":    [67115551, 268454953]
+}
+```
 
 ```
 GET /scoreboard
 ```
 
-Response shape:
+Returns the current scoreboard state:
 
 ```json
 {
@@ -88,76 +104,20 @@ Response shape:
 
 All hex strings follow the bacc-rs BigUint encoding (MSB = oldest entry,
 LSB = newest). They are passed directly to the WASM parse functions.
+Card integers use the Cactus Kev u32 encoding.
 
 ### Wiring the server into the TypeScript frontend
 
-`www/scoreboard.ts` contains a ready-made `fetchScoreboard` function that
-fetches the endpoint and calls the WASM parse functions. Apply the following
-diff to `www/main.ts`:
+`www/bacc/api.ts` exports a `GameSource` class that abstracts over both the
+local engine and the REST API. To switch from local to remote, pass the server
+URL to the constructor:
 
 ```diff
--import { BaccaratShoe } from "./bacc/shoe"
--import { BaccaratScoreboard } from "./bacc/scoreboard"
--import { parse_bead_plate, parse_big_road, parse_derived_road } from "./wasm"
-+import { fetchScoreboard } from "./scoreboard"
- import { renderGrid } from "./render"
- import { GridConfig } from "./types"
-
- // ... GridConfig constants and DERIVED_IDS unchanged ...
-
--const ROUND_INTERVAL_MS = 5_000
--
--const shoe = new BaccaratShoe()
--const scoreboard = new BaccaratScoreboard()
--
--function render(): void {
--  const beadCanvas = document.getElementById("bead-plate") as HTMLCanvasElement
--  renderGrid(beadCanvas, parse_bead_plate(14, scoreboard.beadPlateHex()), BEAD_PLATE_CONFIG)
--
--  const bigRoadCanvas = document.getElementById("big-road") as HTMLCanvasElement
--  renderGrid(bigRoadCanvas, parse_big_road(38, scoreboard.bigRoadHex()), BIG_ROAD_CONFIG)
--
--  const derivedHex = scoreboard.derivedRoadsHex()
--  for (let i = 0; i < DERIVED_IDS.length; i++) {
--    const canvas = document.getElementById(DERIVED_IDS[i]) as HTMLCanvasElement
--    if (canvas) renderGrid(canvas, parse_derived_road(i === 0 ? 38 : 18, derivedHex[i]), DERIVED_CONFIGS[i])
--  }
--}
--
--function tick(): void {
--  if (shoe.isExhausted) {
--    shoe.reset()
--    scoreboard.clear()
--  }
--  const round = shoe.next()
--  if (round) scoreboard.update(round)
--  render()
--}
--
--tick()
--setInterval(tick, ROUND_INTERVAL_MS)
-+const POLL_INTERVAL_MS = 5_000
-+
-+async function refresh(): Promise<void> {
-+  const data = await fetchScoreboard("/scoreboard")
-+
-+  const beadCanvas = document.getElementById("bead-plate") as HTMLCanvasElement
-+  renderGrid(beadCanvas, data.beadPlate, BEAD_PLATE_CONFIG)
-+
-+  const bigRoadCanvas = document.getElementById("big-road") as HTMLCanvasElement
-+  renderGrid(bigRoadCanvas, data.bigRoad, BIG_ROAD_CONFIG)
-+
-+  for (let i = 0; i < data.derivedRoads.length; i++) {
-+    const canvas = document.getElementById(DERIVED_IDS[i]) as HTMLCanvasElement
-+    if (canvas) renderGrid(canvas, data.derivedRoads[i], DERIVED_CONFIGS[i])
-+  }
-+}
-+
-+refresh().catch(console.error)
-+setInterval(() => refresh().catch(console.error), POLL_INTERVAL_MS)
+-const source = new GameSource()
++const source = new GameSource("http://localhost:3000")
 ```
 
-The webpack dev server is already configured to proxy `/scoreboard` to
-`http://localhost:3000`, so no CORS configuration is needed during development.
-For production, point the fetch URL at the server directly or configure your
-own reverse proxy.
+`GameSource` calls `POST /round/next` via `nextRound()` and `GET /scoreboard`
+via `getScoreboard()`. The webpack dev server is already configured to proxy
+both `/round` and `/scoreboard` to `http://localhost:3000`, so no CORS
+configuration is needed during development.
