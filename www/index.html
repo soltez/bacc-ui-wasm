@@ -2,9 +2,60 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>bacc-ui-wasm</title>
+    <title>Baccarat Scoreboard</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        background: #2a2a2a;
+        color: #eee;
+        padding: 16px;
+        margin: 0;
+      }
+      .row {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 8px;
+      }
+      canvas { display: block; }
+      h2 {
+        font-size: 11px;
+        margin: 0 0 4px;
+        color: #aaa;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .panel { display: flex; flex-direction: column; }
+    </style>
   </head>
   <body>
+    <div class="row">
+      <div class="panel">
+        <h2>Bead Plate</h2>
+        <canvas id="bead-plate"></canvas>
+      </div>
+    </div>
+    <div class="row">
+      <div class="panel">
+        <h2>Big Road</h2>
+        <canvas id="big-road"></canvas>
+      </div>
+    </div>
+    <div class="row">
+      <div class="panel">
+        <h2>Big Eye Boy</h2>
+        <canvas id="big-eye-boy"></canvas>
+      </div>
+    </div>
+    <div class="row">
+      <div class="panel">
+        <h2>Small Road</h2>
+        <canvas id="small-road"></canvas>
+      </div>
+      <div class="panel" style="margin-left: 8px;">
+        <h2>Cockroach Pig</h2>
+        <canvas id="cockroach-pig"></canvas>
+      </div>
+    </div>
     <script src="./bootstrap.js"></script>
   </body>
 </html>
