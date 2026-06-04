@@ -1,5 +1,5 @@
 import { RoadmapGenerator } from "baccarat-engine"
-import { Round } from "./shoe"
+import { Round, ScoreboardJson } from "./round"
 
 interface BigRoadBead {
   outcome: number      // 1=player, 2=banker
@@ -79,6 +79,14 @@ export class BaccaratScoreboard {
       bytesToHex(runLengthEncode((this.roadmap as any).smallRoad(bigRoad))),
       bytesToHex(runLengthEncode((this.roadmap as any).cockroachPig(bigRoad))),
     ]
+  }
+
+  toJson(): ScoreboardJson {
+    return {
+      bead_plate: this.beadPlateHex(),
+      big_road: this.bigRoadHex(),
+      derived_roads: this.derivedRoadsHex(),
+    }
   }
 
   private updateBeadPlate(round: Round): void {

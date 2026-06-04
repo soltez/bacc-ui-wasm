@@ -1,8 +1,6 @@
 import { renderGrid } from "./render"
 import { GridConfig } from "./types"
-import { BaccaratShoe } from "./bacc/shoe"
-import { BaccaratScoreboard } from "./bacc/scoreboard"
-import { parse_bead_plate, parse_big_road, parse_derived_road } from "./wasm"
+import { GameSource, parseScoreboard, ScoreboardJson } from "./bacc/api"
 
 const BEAD_PLATE_CONFIG: GridConfig = {
   cols: 14,
@@ -41,34 +39,31 @@ const DERIVED_CONFIGS: GridConfig[] = [
 ]
 
 const DERIVED_IDS = ["big-eye-boy", "small-road", "cockroach-pig"]
-const ROUND_INTERVAL_MS = 5_000
 
-const shoe = new BaccaratShoe()
-const scoreboard = new BaccaratScoreboard()
+const source = new GameSource()
 
-function render(): void {
+function render(scoreboard: ScoreboardJson): void {
+  const grids = parseScoreboard(scoreboard)
+
   const beadCanvas = document.getElementById("bead-plate") as HTMLCanvasElement
-  renderGrid(beadCanvas, parse_bead_plate(14, scoreboard.beadPlateHex()), BEAD_PLATE_CONFIG)
+  renderGrid(beadCanvas, grids.beadPlate, BEAD_PLATE_CONFIG)
 
   const bigRoadCanvas = document.getElementById("big-road") as HTMLCanvasElement
-  renderGrid(bigRoadCanvas, parse_big_road(38, scoreboard.bigRoadHex()), BIG_ROAD_CONFIG)
+  renderGrid(bigRoadCanvas, grids.bigRoad, BIG_ROAD_CONFIG)
 
-  const derivedHex = scoreboard.derivedRoadsHex()
   for (let i = 0; i < DERIVED_IDS.length; i++) {
     const canvas = document.getElementById(DERIVED_IDS[i]) as HTMLCanvasElement
-    if (canvas) renderGrid(canvas, parse_derived_road(i === 0 ? 38 : 18, derivedHex[i]), DERIVED_CONFIGS[i])
+    if (canvas) renderGrid(canvas, grids.derivedRoads[i], DERIVED_CONFIGS[i])
   }
 }
 
-function tick(): void {
-  if (shoe.isExhausted) {
-    shoe.reset()
-    scoreboard.clear()
-  }
-  const round = shoe.next()
-  if (round) scoreboard.update(round)
-  render()
+async function nextHand(): Promise<void> {
+  const btn = document.getElementById("deal") as HTMLButtonElement
+  btn.disabled = true
+  await source.nextRound()
+  render(await source.getScoreboard())
+  btn.disabled = false
 }
 
-tick()
-setInterval(tick, ROUND_INTERVAL_MS)
+render({ bead_plate: "0", big_road: "0", derived_roads: ["0", "0", "0"] })
+document.getElementById("deal")!.addEventListener("click", nextHand)

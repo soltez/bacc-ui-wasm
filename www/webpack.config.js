@@ -11,7 +11,7 @@ module.exports = {
   devServer: {
     proxy: [
       {
-        context: ["/scoreboard"],
+        context: ["/scoreboard", "/round"],
         target: "http://localhost:3000",
       },
     ],
