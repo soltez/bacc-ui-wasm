@@ -8,6 +8,26 @@ module.exports = {
     filename: "bootstrap.js",
   },
   mode: "development",
+  devServer: {
+    proxy: [
+      {
+        context: ["/scoreboard"],
+        target: "http://localhost:3000",
+      },
+    ],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: "ts-loader",
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  resolve: {
+    extensions: [".ts", ".js"],
+  },
   plugins: [
     new CopyWebpackPlugin({
       patterns: [{ from: "index.html" }],
