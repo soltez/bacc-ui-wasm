@@ -212,9 +212,9 @@ pub const ACE_BIG_PIP_C: &str = r##"<g
   </g>
 </g>"##;
 
-static FACE_DATA: &[u8] = include_bytes!("face_card_artwork.bin");
+static FACE_DATA_GZ: &[u8] = include_bytes!("face_card_artwork.bin.gz");
 
-// (offset, length) into FACE_DATA for each face figure
+// (offset, length) into decompressed face data for each face figure
 #[rustfmt::skip]
 static FACE_INDEX: [(usize, usize); 12] = [
     (0, 92686),       // FACE_JS
@@ -231,9 +231,23 @@ static FACE_INDEX: [(usize, usize); 12] = [
     (914303, 78288),  // FACE_KC
 ];
 
+static FACE_DATA: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+
+fn face_data() -> &'static [u8] {
+    FACE_DATA.get_or_init(|| {
+        use flate2::read::GzDecoder;
+        use std::io::Read;
+        let mut decoder = GzDecoder::new(FACE_DATA_GZ);
+        let mut buf = Vec::new();
+        decoder.read_to_end(&mut buf).expect("face data decompress");
+        buf
+    })
+}
+
 fn face_figure(idx: usize) -> &'static str {
     let (off, len) = FACE_INDEX[idx];
-    std::str::from_utf8(&FACE_DATA[off..off + len]).expect("face figure utf8")
+    let data = face_data();
+    std::str::from_utf8(&data[off..off + len]).expect("face figure utf8")
 }
 
 // ---- SVG COMPOSITION ----
