@@ -3,6 +3,14 @@ mod utils;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 const ROWS: usize = 6;
+const CELL: usize = 24;
+
+const COLOR_PLAYER: &str = "#1a1abd";
+const COLOR_BANKER: &str = "#7c1e28";
+const COLOR_TIE: &str = "#448726";
+const COLOR_BG: &str = "#f5f0e8";
+const COLOR_GRID: &str = "#d4cbb5";
+const COLOR_NATURAL: &str = "#db953c";
 
 fn hex_to_bytes(hex: &str) -> Vec<u8> {
     let padded;
@@ -141,9 +149,7 @@ fn decode_derived_road_runs(bytes: &[u8]) -> Vec<Vec<(u8, u8)>> {
 /// Cell layout: [lo_byte, hi_byte]. lo_byte 0 = empty.
 /// lo_byte (xx33ppww): bits 5-4 = third card flags, 3-2 = pair flags, 1-0 = outcome (1=player, 2=banker, 3=tie).
 /// hi_byte bits 3-0 = winner hand value (0-9).
-#[wasm_bindgen]
 pub fn parse_bead_plate(cols: u32, hex: &str) -> Box<[u8]> {
-    utils::set_panic_hook();
     let cols = cols as usize;
     let mut bytes = hex_to_bytes(hex);
     if bytes.len() % 2 == 1 {
@@ -166,9 +172,7 @@ pub fn parse_bead_plate(cols: u32, hex: &str) -> Box<[u8]> {
 /// Cell layout: [bead_byte, ttttvvvv]. bead_byte 0 = empty.
 /// bead_byte (xx33ppww): bits 5-4 = third card flags, 3-2 = pair flags, 1-0 = outcome (1=player, 2=banker).
 /// aux_byte (ttttvvvv): bits 7-4 = tie_count, bits 3-0 = hand_value of the winner.
-#[wasm_bindgen]
 pub fn parse_big_road(cols: u32, hex: &str) -> Box<[u8]> {
-    utils::set_panic_hook();
     let cols = cols as usize;
     let bytes = hex_to_bytes(hex);
     let columns = decode_big_road_columns(&bytes);
@@ -187,9 +191,7 @@ pub fn parse_big_road(cols: u32, hex: &str) -> Box<[u8]> {
 
 /// Returns cols * 6 bytes, col-major. Shows the most recent cols columns.
 /// Cell value: 0=empty, 2=red (trend), 1=blue (chaos).
-#[wasm_bindgen]
 pub fn parse_derived_road(cols: u32, hex: &str) -> Box<[u8]> {
-    utils::set_panic_hook();
     let cols = cols as usize;
     let bytes = hex_to_bytes(hex);
     let runs = decode_derived_road_runs(&bytes);
@@ -202,6 +204,230 @@ pub fn parse_derived_road(cols: u32, hex: &str) -> Box<[u8]> {
         }
     }
     out.into_boxed_slice()
+}
+
+fn marker_color(outcome: u8) -> &'static str {
+    match outcome {
+        1 => COLOR_PLAYER,
+        2 => COLOR_BANKER,
+        3 => COLOR_TIE,
+        _ => "#888888",
+    }
+}
+
+fn write_svg_header(out: &mut String, cols: usize, step: usize) {
+    let w = cols * CELL;
+    let h = ROWS * CELL;
+    out.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\">\
+        <rect width=\"{}\" height=\"{}\" fill=\"{}\"/>",
+        w, h, w, h, w, h, COLOR_BG
+    ));
+    for c in (0..=cols).step_by(step) {
+        let x = c * CELL;
+        out.push_str(&format!(
+            "<line x1=\"{}\" y1=\"0\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"0.5\"/>",
+            x, x, h, COLOR_GRID
+        ));
+    }
+    for r in (0..=ROWS).step_by(step) {
+        let y = r * CELL;
+        out.push_str(&format!(
+            "<line x1=\"0\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"0.5\"/>",
+            y, w, y, COLOR_GRID
+        ));
+    }
+}
+
+fn write_bead_plate_cell(out: &mut String, col: usize, row: usize, lo_byte: u8, hi_byte: u8) {
+    if lo_byte == 0 {
+        return;
+    }
+    let outcome = lo_byte & 0x03;
+    if outcome == 0 {
+        return;
+    }
+    let hand_value = hi_byte & 0x0f;
+    let player_pair = (lo_byte >> 2) & 0x01;
+    let banker_pair = (lo_byte >> 3) & 0x01;
+
+    let cx = col * CELL + CELL / 2;
+    let cy = row * CELL + CELL / 2;
+    let r = CELL as f64 * 0.43;
+    let color = marker_color(outcome);
+    let font_size = (r * 1.3).round() as usize;
+
+    out.push_str(&format!(
+        "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
+        cx, cy, r, color
+    ));
+    out.push_str(&format!(
+        "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" dominant-baseline=\"central\" \
+        fill=\"white\" font-weight=\"bold\" font-size=\"{}\" font-family=\"sans-serif\">{}</text>",
+        cx, cy, font_size, hand_value
+    ));
+
+    let dot_r = (CELL as f64 * 0.16).max(2.0);
+    let half = (CELL / 2) as f64;
+    let pad = dot_r + 1.0;
+    let cx = cx as f64;
+    let cy = cy as f64;
+
+    if banker_pair != 0 {
+        out.push_str(&format!(
+            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
+            cx - half + pad, cy - half + pad, dot_r, COLOR_BANKER
+        ));
+    }
+    if player_pair != 0 {
+        out.push_str(&format!(
+            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
+            cx + half - pad, cy + half - pad, dot_r, COLOR_PLAYER
+        ));
+    }
+}
+
+fn write_big_road_cell(out: &mut String, col: usize, row: usize, bead_byte: u8, aux_byte: u8) {
+    let tie_count = (aux_byte >> 4) as u32;
+    if bead_byte == 0 && tie_count == 0 {
+        return;
+    }
+
+    let outcome = bead_byte & 0x03;
+    let player_pair = (bead_byte >> 2) & 0x01;
+    let banker_pair = (bead_byte >> 3) & 0x01;
+    let hand_value = aux_byte & 0x0f;
+    let is_natural = ((bead_byte >> 4) & 0x03) == 0 && hand_value >= 8;
+
+    let cx = (col * CELL + CELL / 2) as f64;
+    let cy = (row * CELL + CELL / 2) as f64;
+    let r = CELL as f64 * 0.43;
+
+    if bead_byte != 0 {
+        let color = marker_color(outcome);
+        out.push_str(&format!(
+            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"2.2\"/>",
+            cx, cy, r, color
+        ));
+        if is_natural {
+            out.push_str(&format!(
+                "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
+                cx,
+                cy,
+                r * 0.65,
+                COLOR_NATURAL
+            ));
+        }
+
+        let dot_r = (CELL as f64 * 0.16).max(2.0);
+        let diag = r * std::f64::consts::SQRT_2 / 2.0;
+        if banker_pair != 0 {
+            out.push_str(&format!(
+                "<circle cx=\"{:.2}\" cy=\"{:.2}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
+                cx - diag, cy - diag, dot_r, COLOR_BANKER
+            ));
+        }
+        if player_pair != 0 {
+            out.push_str(&format!(
+                "<circle cx=\"{:.2}\" cy=\"{:.2}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
+                cx + diag, cy + diag, dot_r, COLOR_PLAYER
+            ));
+        }
+    }
+
+    if tie_count >= 1 {
+        let angle = std::f64::consts::FRAC_PI_4;
+        let mid_x = cx + r * angle.cos();
+        let mid_y = cy - r * angle.sin();
+        let dx = CELL as f64 * 0.15 * angle.cos();
+        let dy = CELL as f64 * 0.15 * angle.sin();
+        out.push_str(&format!(
+            "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"{}\" stroke-width=\"4\"/>",
+            mid_x - dx, mid_y + dy, mid_x + dx, mid_y - dy, COLOR_TIE
+        ));
+    }
+    if tie_count >= 2 {
+        let font_size = (r * 1.3).round() as usize;
+        out.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" dominant-baseline=\"central\" \
+            fill=\"{}\" font-weight=\"bold\" font-size=\"{}\" font-family=\"sans-serif\">{}</text>",
+            cx, cy, COLOR_TIE, font_size, tie_count
+        ));
+    }
+}
+
+fn write_derived_cell(out: &mut String, col: usize, row: usize, marker: u8, icon: u8) {
+    if marker == 0 {
+        return;
+    }
+    let color = marker_color(marker);
+    let cx = (col * CELL + CELL / 2) as f64;
+    let cy = (row * CELL + CELL / 2) as f64;
+    let r = CELL as f64 * 0.4;
+    match icon {
+        0 => out.push_str(&format!(
+            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"4\"/>",
+            cx, cy, r, color
+        )),
+        1 => out.push_str(&format!(
+            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
+            cx, cy, r, color
+        )),
+        _ => out.push_str(&format!(
+            "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"{}\" stroke-width=\"4\"/>",
+            cx - r * 0.7, cy + r * 0.7, cx + r * 0.7, cy - r * 0.7, color
+        )),
+    }
+}
+
+#[wasm_bindgen]
+pub fn render_bead_plate(cols: u32, hex: &str) -> String {
+    utils::set_panic_hook();
+    let data = parse_bead_plate(cols, hex);
+    let cols = cols as usize;
+    let mut out = String::new();
+    write_svg_header(&mut out, cols, 1);
+    for col in 0..cols {
+        for row in 0..ROWS {
+            let idx = (col * ROWS + row) * 2;
+            write_bead_plate_cell(&mut out, col, row, data[idx], data[idx + 1]);
+        }
+    }
+    out.push_str("</svg>");
+    out
+}
+
+#[wasm_bindgen]
+pub fn render_big_road(cols: u32, hex: &str) -> String {
+    utils::set_panic_hook();
+    let data = parse_big_road(cols, hex);
+    let cols = cols as usize;
+    let mut out = String::new();
+    write_svg_header(&mut out, cols, 1);
+    for col in 0..cols {
+        for row in 0..ROWS {
+            let idx = (col * ROWS + row) * 2;
+            write_big_road_cell(&mut out, col, row, data[idx], data[idx + 1]);
+        }
+    }
+    out.push_str("</svg>");
+    out
+}
+
+#[wasm_bindgen]
+pub fn render_derived_road(cols: u32, icon: u8, hex: &str) -> String {
+    utils::set_panic_hook();
+    let data = parse_derived_road(cols, hex);
+    let cols = cols as usize;
+    let mut out = String::new();
+    write_svg_header(&mut out, cols, 2);
+    for col in 0..cols {
+        for row in 0..ROWS {
+            write_derived_cell(&mut out, col, row, data[col * ROWS + row], icon);
+        }
+    }
+    out.push_str("</svg>");
+    out
 }
 
 #[cfg(test)]

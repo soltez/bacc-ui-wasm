@@ -16,47 +16,39 @@
         align-items: flex-start;
         margin-bottom: 8px;
       }
-      canvas { display: block; }
-      h2 {
-        font-size: 11px;
-        margin: 0 0 4px;
-        color: #aaa;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
       .panel { display: flex; flex-direction: column; }
+      .panel svg { display: block; width: 100%; height: auto; }
+      .app { max-width: 1200px; margin: 0 auto; }
+      .table { width: 90%; border: 1px solid red; }
     </style>
   </head>
   <body>
-    <div class="row">
-      <button id="deal">Deal</button>
-    </div>
-    <div class="row">
-      <div class="panel">
-        <h2>Bead Plate</h2>
-        <canvas id="bead-plate"></canvas>
+    <div class="app">
+      <div class="table">
       </div>
-    </div>
-    <div class="row">
-      <div class="panel">
-        <h2>Big Road</h2>
-        <canvas id="big-road"></canvas>
+      <div class="controls">
+        <button id="deal">Deal</button>
       </div>
-    </div>
-    <div class="row">
-      <div class="panel">
-        <h2>Big Eye Boy</h2>
-        <canvas id="big-eye-boy"></canvas>
-      </div>
-    </div>
-    <div class="row">
-      <div class="panel">
-        <h2>Small Road</h2>
-        <canvas id="small-road"></canvas>
-      </div>
-      <div class="panel" style="margin-left: 8px;">
-        <h2>Cockroach Pig</h2>
-        <canvas id="cockroach-pig"></canvas>
+      <div class="scoreboard">
+        <div class="row">
+          <div class="panel" style="flex: 1">
+            <div id="bead-plate"></div>
+          </div>
+          <div class="panel" style="flex: 2; margin-left: 8px;">
+            <div id="big-road"></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="panel" style="flex: 1">
+            <div id="big-eye-boy"></div>
+          </div>
+          <div class="panel" style="flex: 1; margin-left: 8px;">
+            <div id="small-road"></div>
+          </div>
+          <div class="panel" style="flex: 1; margin-left: 8px;">
+            <div id="cockroach-pig"></div>
+          </div>
+        </div>
       </div>
     </div>
     <script src="./bootstrap.js"></script>

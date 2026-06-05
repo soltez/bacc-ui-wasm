@@ -1,1 +1,1 @@
-export { parse_bead_plate, parse_big_road, parse_derived_road } from "bacc-ui-wasm"
+export { render_bead_plate, render_big_road, render_derived_road } from "bacc-ui-wasm"

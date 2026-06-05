@@ -1,12 +1,12 @@
 import { Round, ScoreboardJson, encodeRound } from "./round"
 import { BaccaratShoe } from "./shoe"
 import { BaccaratScoreboard } from "./scoreboard"
-import { parse_bead_plate, parse_big_road, parse_derived_road } from "../wasm"
+import { render_bead_plate, render_big_road, render_derived_road } from "../wasm"
 
-export interface ScoreboardGrids {
-  beadPlate: Uint8Array
-  bigRoad: Uint8Array
-  derivedRoads: [Uint8Array, Uint8Array, Uint8Array]
+export interface ScoreboardSvg {
+  beadPlate: string
+  bigRoad: string
+  derivedRoads: [string, string, string]
 }
 
 export { ScoreboardJson } from "./round"
@@ -56,14 +56,14 @@ export class GameSource {
   }
 }
 
-export function parseScoreboard(json: ScoreboardJson): ScoreboardGrids {
+export function renderScoreboard(json: ScoreboardJson): ScoreboardSvg {
   return {
-    beadPlate: parse_bead_plate(14, json.bead_plate),
-    bigRoad: parse_big_road(38, json.big_road),
+    beadPlate: render_bead_plate(15, json.bead_plate),
+    bigRoad: render_big_road(30, json.big_road),
     derivedRoads: [
-      parse_derived_road(38, json.derived_roads[0]),
-      parse_derived_road(18, json.derived_roads[1]),
-      parse_derived_road(18, json.derived_roads[2]),
+      render_derived_road(24, 0, json.derived_roads[0]),
+      render_derived_road(24, 1, json.derived_roads[1]),
+      render_derived_road(24, 2, json.derived_roads[2]),
     ],
   }
 }
