@@ -1,3 +1,4 @@
+pub mod svg_playing_cards;
 mod utils;
 
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -428,6 +429,12 @@ pub fn render_derived_road(cols: u32, icon: u8, hex: &str) -> String {
     }
     out.push_str("</svg>");
     out
+}
+
+#[wasm_bindgen]
+pub fn render_card(card: u32, corners: bool) -> String {
+    utils::set_panic_hook();
+    svg_playing_cards::card_svg(card, corners)
 }
 
 #[cfg(test)]

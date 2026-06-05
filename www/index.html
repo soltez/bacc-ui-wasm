@@ -19,14 +19,81 @@
       .panel { display: flex; flex-direction: column; }
       .panel svg { display: block; width: 100%; height: auto; }
       .app { max-width: 1200px; margin: 0 auto; }
-      .table { width: 90%; border: 1px solid red; }
+      .table {
+        display: flex;
+        align-items: flex-start;
+        gap: 24px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .table > button { align-self: center; margin: auto 0; }
+      .hand {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 146px;
+      }
+      .hand-header {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .hand-label {
+        font-size: 14px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #aaa;
+      }
+      .hand-value {
+        font-size: 20px;
+        font-weight: bold;
+        color: #eee;
+      }
+      .hand-cards {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+      }
+      .hand-cards { flex-direction: column; gap: 6px; min-height: 178px; }
+      .hand-row { display: flex; flex-direction: row; gap: 6px; }
+      .hand-row.centered { justify-content: center; }
+      .card-wrap { flex-shrink: 0; }
+      .card-wrap svg { display: block; width: 70px; height: auto; }
+      .card-wrap.rotated {
+        position: relative;
+        flex-shrink: 0;
+        width: 101.7px;
+        height: 70px;
+      }
+      .card-wrap.rotated svg {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 70px;
+        height: auto;
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
     </style>
   </head>
   <body>
     <div class="app">
       <div class="table">
-      </div>
-      <div class="controls">
+        <div class="hand">
+          <div class="hand-header">
+            <span class="hand-label">Player</span>
+            <span class="hand-value" id="player-value">0</span>
+          </div>
+          <div class="hand-cards" id="player-cards"></div>
+        </div>
+        <div class="hand">
+          <div class="hand-header">
+            <span class="hand-label">Banker</span>
+            <span class="hand-value" id="banker-value">0</span>
+          </div>
+          <div class="hand-cards" id="banker-cards"></div>
+        </div>
         <button id="deal">Deal</button>
       </div>
       <div class="scoreboard">

@@ -9,7 +9,7 @@ export interface ScoreboardSvg {
   derivedRoads: [string, string, string]
 }
 
-export { ScoreboardJson } from "./round"
+export { ScoreboardJson, Round } from "./round"
 
 export interface RoundJson {
   encoded: number

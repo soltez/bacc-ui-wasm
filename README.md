@@ -1,5 +1,21 @@
 # bacc-ui-wasm
-Baccarat scoreboard visualizer built with Rust and WebAssembly
+
+Rust/WebAssembly visualization primitives for baccarat data produced by
+[bacc-rs](https://github.com/soltez/bacc-rs) and [bacc-js](https://github.com/soltez/bacc-js).
+
+The crate exposes two categories of building blocks:
+
+- **Card renderer** -- generates a standalone SVG for any playing card or card
+  back, given a Cactus Kev u32 card integer.
+- **Road renderers** -- generate standalone SVGs for the bead plate, big road,
+  and the three derived roads (big eye boy, small road, cockroach pig), given
+  hex-encoded road strings in the bacc-rs format.
+
+The `www/` directory contains a reference frontend that wires these primitives
+to a game source, using [bacc-js](https://github.com/soltez/bacc-js) as the
+client-side engine.
+
+---
 
 ## Prerequisites
 
@@ -24,8 +40,8 @@ cd www && npm install
 cd www && npm start
 ```
 
-Opens the dev server at http://localhost:8080. By default the scoreboard
-runs client-side using a local BaccaratShoe and BaccaratScoreboard.
+Opens the dev server at http://localhost:8080. By default the frontend runs
+fully client-side using bacc-js.
 
 ## Test
 
@@ -35,48 +51,72 @@ cargo test
 
 ## After git clean -xdf
 
-Both the `pkg/` directory and `node_modules/` are removed by a clean. Re-run
-the full setup steps above to restore them.
+Both `pkg/` and `node_modules/` are removed by a clean. Re-run the full setup
+steps above to restore them.
 
 ---
 
-## Using a bacc-rs server as the scoreboard source
+## WASM API
 
-The WASM parse functions accept bacc-rs hex strings directly. If you have a
-running bacc-server instance you can replace the local client-side scoreboard
-with live data from the server in a few steps.
+### Card rendering
 
-### Prerequisites
+```ts
+render_card(card: number, corners: boolean): string
+```
 
-- Rust toolchain (stable, via rustup)
-- bacc-server cloned and built:
+Returns a standalone SVG string for the given card.
+
+- `card` -- Cactus Kev u32: `((suit << 4) | rank) << 8`
+  - suit: `0x1`=spades, `0x2`=hearts, `0x4`=diamonds, `0x8`=clubs
+  - rank: `0`=2 .. `8`=10, `9`=J, `10`=Q, `11`=K, `12`=A
+  - `card=0` (or invalid suit): renders the card back
+- `corners` -- when `true`, renders corner rank labels and corner suit pips in
+  standard positions. When `false`, produces the card face used during the
+  baccarat peeling ritual: a dealt card sits face-down and the player peels from
+  the bottom-right corner, which is the bottom-right of the face-up side. In
+  this mode the corner suit pip and rank label are removed from that corner so
+  that neither the suit nor the rank is revealed as the corner or side is
+  gradually exposed.
+
+### Road rendering
+
+```ts
+render_bead_plate(cols: number, hex: string): string
+render_big_road(cols: number, hex: string): string
+render_derived_road(cols: number, idx: number, hex: string): string
+```
+
+Each returns a standalone SVG string sized to `cols * 24 x 6 * 24` pixels.
+
+- `hex` -- bacc-rs BigUint hex string (MSB = oldest entry, LSB = newest)
+- `idx` -- derived road selector: `0`=big eye boy, `1`=small road, `2`=cockroach pig
+
+---
+
+## Using a bacc-rs server as the data source
+
+The `GameSource` class from [bacc-js](https://github.com/soltez/bacc-js)
+abstracts over local and remote data. To switch from the bacc-js local engine
+to a running [bacc-server](https://github.com/soltez/bacc-server) instance:
+
+```diff
+-const source = new GameSource()
++const source = new GameSource("http://localhost:3000")
+```
+
+### bacc-server setup
 
 ```sh
 git clone https://github.com/soltez/bacc-server
 cd bacc-server
 cargo build --release
-```
-
-bacc-server dependencies (managed by Cargo):
-- bacc-rs 0.2.0
-- axum 0.8
-- tokio (full features)
-- serde / serde_json
-
-Start the server:
-
-```sh
 ./target/release/bacc-server
 # Listening on http://0.0.0.0:3000
 ```
 
-The server exposes two endpoints:
+### Endpoints
 
-```
-POST /round/next
-```
-
-Advances the shoe by one hand and returns the round details:
+`POST /round/next` -- advances the shoe and returns the round:
 
 ```json
 {
@@ -88,11 +128,7 @@ Advances the shoe by one hand and returns the round details:
 }
 ```
 
-```
-GET /scoreboard
-```
-
-Returns the current scoreboard state:
+`GET /scoreboard` -- returns the current road state:
 
 ```json
 {
@@ -102,22 +138,6 @@ Returns the current scoreboard state:
 }
 ```
 
-All hex strings follow the bacc-rs BigUint encoding (MSB = oldest entry,
-LSB = newest). They are passed directly to the WASM parse functions.
-Card integers use the Cactus Kev u32 encoding.
-
-### Wiring the server into the TypeScript frontend
-
-`www/bacc/api.ts` exports a `GameSource` class that abstracts over both the
-local engine and the REST API. To switch from local to remote, pass the server
-URL to the constructor:
-
-```diff
--const source = new GameSource()
-+const source = new GameSource("http://localhost:3000")
-```
-
-`GameSource` calls `POST /round/next` via `nextRound()` and `GET /scoreboard`
-via `getScoreboard()`. The webpack dev server is already configured to proxy
-both `/round` and `/scoreboard` to `http://localhost:3000`, so no CORS
-configuration is needed during development.
+Card integers use the Cactus Kev u32 encoding. The webpack dev server proxies
+`/round` and `/scoreboard` to `http://localhost:3000`, so no CORS configuration
+is needed during development.
