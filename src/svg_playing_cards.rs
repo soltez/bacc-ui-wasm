@@ -372,40 +372,74 @@ fn rank_text(rank: u8, color: &str, cx: f64, flip: bool) -> String {
     }
 }
 
-// Returns (pip_d, color, pip_sx, pip_sy, corner_sx, corner_sy,
-//          tl_tx, tl_ty, br_tx, br_ty, br_flip)
-fn suit_data(
-    suit: u8,
-) -> (
-    &'static str,
-    &'static str,
-    f64,
-    f64,
-    f64,
-    f64,
-    f64,
-    f64,
-    f64,
-    f64,
-    bool,
-) {
+struct SuitData {
+    pip_d: &'static str,
+    color: &'static str,
+    pip_sx: f64,
+    pip_sy: f64,
+    corner_sx: f64,
+    corner_sy: f64,
+    tl_tx: f64,
+    tl_ty: f64,
+    br_tx: f64,
+    br_ty: f64,
+    br_flip: bool,
+}
+
+fn suit_data(suit: u8) -> SuitData {
     match suit {
-        0x1 => (
-            PIP_D_S, "#000000", 2.6486789, 2.4217176, 1.5085945, 1.3793253, 16.929041, 45.066155,
-            150.22511, 198.04408, true,
-        ),
-        0x2 => (
-            PIP_D_H, "#df0000", 2.7790082, 2.600887, 1.6743072, 1.5669921, 17.177511, 46.385321,
-            150.15601, 195.14313, true,
-        ),
-        0x4 => (
-            PIP_D_D, "#df0000", 2.5882908, 2.5882908, 1.4769065, 1.4769065, 16.968095, 44.236162,
-            150.62089, 198.50346, false,
-        ),
-        _ => (
-            PIP_D_C, "#000000", 2.5125778, 2.5125778, 1.4856506, 1.4856506, 17.483366, 43.739708,
-            149.691133, 198.740184, true,
-        ),
+        0x1 => SuitData {
+            pip_d: PIP_D_S,
+            color: "#000000",
+            pip_sx: 2.6486789,
+            pip_sy: 2.4217176,
+            corner_sx: 1.5085945,
+            corner_sy: 1.3793253,
+            tl_tx: 16.929041,
+            tl_ty: 45.066155,
+            br_tx: 150.22511,
+            br_ty: 198.04408,
+            br_flip: true,
+        },
+        0x2 => SuitData {
+            pip_d: PIP_D_H,
+            color: "#df0000",
+            pip_sx: 2.7790082,
+            pip_sy: 2.600887,
+            corner_sx: 1.6743072,
+            corner_sy: 1.5669921,
+            tl_tx: 17.177511,
+            tl_ty: 46.385321,
+            br_tx: 150.15601,
+            br_ty: 195.14313,
+            br_flip: true,
+        },
+        0x4 => SuitData {
+            pip_d: PIP_D_D,
+            color: "#df0000",
+            pip_sx: 2.5882908,
+            pip_sy: 2.5882908,
+            corner_sx: 1.4769065,
+            corner_sy: 1.4769065,
+            tl_tx: 16.968095,
+            tl_ty: 44.236162,
+            br_tx: 150.62089,
+            br_ty: 198.50346,
+            br_flip: false,
+        },
+        _ => SuitData {
+            pip_d: PIP_D_C,
+            color: "#000000",
+            pip_sx: 2.5125778,
+            pip_sy: 2.5125778,
+            corner_sx: 1.4856506,
+            corner_sy: 1.4856506,
+            tl_tx: 17.483366,
+            tl_ty: 43.739708,
+            br_tx: 149.691133,
+            br_ty: 198.740184,
+            br_flip: true,
+        },
     }
 }
 
@@ -503,16 +537,16 @@ fn card_back_svg() -> String {
 }
 
 fn composed_svg(suit: u8, rank: u8, center: &str, corners: bool) -> String {
-    let (d, color, _, _, csx, csy, tl_tx, tl_ty, br_tx, br_ty, br_flip) = suit_data(suit);
+    let s = suit_data(suit);
     let (top_tx, bot_tx) = if corners {
-        (tl_tx, br_tx)
+        (s.tl_tx, s.br_tx)
     } else {
-        (br_tx, tl_tx)
+        (s.br_tx, s.tl_tx)
     };
     let (tl_rank, br_rank) = if corners {
         (
-            rank_text(rank, color, tl_tx, false),
-            rank_text(rank, color, tl_tx, true),
+            rank_text(rank, s.color, s.tl_tx, false),
+            rank_text(rank, s.color, s.tl_tx, true),
         )
     } else {
         (String::new(), String::new())
@@ -521,10 +555,26 @@ fn composed_svg(suit: u8, rank: u8, center: &str, corners: bool) -> String {
         "{}{}{}{}{}{}{}</svg>",
         SVG_OPEN,
         card_border_layer(),
-        pip_svg(d, color, csx, csy, top_tx, tl_ty, false),
+        pip_svg(
+            s.pip_d,
+            s.color,
+            s.corner_sx,
+            s.corner_sy,
+            top_tx,
+            s.tl_ty,
+            false
+        ),
         tl_rank,
         center,
-        pip_svg(d, color, csx, csy, bot_tx, br_ty, br_flip),
+        pip_svg(
+            s.pip_d,
+            s.color,
+            s.corner_sx,
+            s.corner_sy,
+            bot_tx,
+            s.br_ty,
+            s.br_flip
+        ),
         br_rank,
     )
 }
@@ -575,15 +625,15 @@ pub fn card_svg(card: u32, corners: bool) -> String {
         9..=11 => face_svg(suit, rank, corners),
         12 => ace_svg(suit, corners),
         _ => {
-            let (d, color, sx, sy, _, _, _, _, _, _, _) = suit_data(suit);
+            let s = suit_data(suit);
             let center: String = pip_positions(suit, rank)
                 .into_iter()
                 .map(|(tx, ty, flip)| {
                     pip_svg(
-                        d,
-                        color,
-                        sx * MAIN_PIP_SCALE,
-                        sy * MAIN_PIP_SCALE,
+                        s.pip_d,
+                        s.color,
+                        s.pip_sx * MAIN_PIP_SCALE,
+                        s.pip_sy * MAIN_PIP_SCALE,
                         tx,
                         ty,
                         flip,
