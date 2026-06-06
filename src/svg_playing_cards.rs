@@ -575,37 +575,22 @@ pub fn card_svg(card: u32, corners: bool) -> String {
         9..=11 => face_svg(suit, rank, corners),
         12 => ace_svg(suit, corners),
         _ => {
-            let (d, color, sx, sy, csx, csy, tl_tx, tl_ty, br_tx, br_ty, br_flip) = suit_data(suit);
-            let pips = pip_positions(suit, rank);
-            let mut out = String::new();
-            let (top_tx, bot_tx) = if corners {
-                (tl_tx, br_tx)
-            } else {
-                (br_tx, tl_tx)
-            };
-            out.push_str(SVG_OPEN);
-            out.push_str(&card_border_layer());
-            out.push_str(&pip_svg(d, color, csx, csy, top_tx, tl_ty, false));
-            if corners {
-                out.push_str(&rank_text(rank, color, tl_tx, false));
-            }
-            for (tx, ty, flip) in pips {
-                out.push_str(&pip_svg(
-                    d,
-                    color,
-                    sx * MAIN_PIP_SCALE,
-                    sy * MAIN_PIP_SCALE,
-                    tx,
-                    ty,
-                    flip,
-                ));
-            }
-            out.push_str(&pip_svg(d, color, csx, csy, bot_tx, br_ty, br_flip));
-            if corners {
-                out.push_str(&rank_text(rank, color, tl_tx, true));
-            }
-            out.push_str("</svg>");
-            out
+            let (d, color, sx, sy, _, _, _, _, _, _, _) = suit_data(suit);
+            let center: String = pip_positions(suit, rank)
+                .into_iter()
+                .map(|(tx, ty, flip)| {
+                    pip_svg(
+                        d,
+                        color,
+                        sx * MAIN_PIP_SCALE,
+                        sy * MAIN_PIP_SCALE,
+                        tx,
+                        ty,
+                        flip,
+                    )
+                })
+                .collect();
+            composed_svg(suit, rank, &center, corners)
         }
     }
 }
