@@ -677,4 +677,315 @@ mod tests {
             );
         }
     }
+
+    // corners=true: two rank <text> elements present (top-left and bottom-right)
+    #[test]
+    fn corners_true_includes_rank_text() {
+        // key = (suit << 4) | rank; rank 0=2, 8=10
+        let cases: &[(u32, &str)] = &[
+            (0x10 << 8, "2"),  // 2s: suit=1, rank=0
+            (0x18 << 8, "10"), // 10s: suit=1, rank=8
+            (0x19 << 8, "J"),
+            (0x2A << 8, "Q"),
+            (0x4B << 8, "K"),
+            (0x8C << 8, "A"),
+        ];
+        for &(card, label) in cases {
+            let svg = card_svg(card, true);
+            let count = svg.matches(&format!(">{label}</text>")).count();
+            assert_eq!(
+                count, 2,
+                "{label}: expected 2 rank text elements, got {count}"
+            );
+        }
+    }
+
+    // corners=false: no rank <text> elements at all
+    #[test]
+    fn corners_false_excludes_rank_text() {
+        let cases: &[(u32, &str)] = &[
+            (0x11 << 8, "2"),
+            (0x18 << 8, "10"),
+            (0x19 << 8, "J"),
+            (0x2A << 8, "Q"),
+            (0x4B << 8, "K"),
+            (0x8C << 8, "A"),
+        ];
+        for &(card, label) in cases {
+            let svg = card_svg(card, false);
+            assert!(
+                !svg.contains("<text"),
+                "{label}: expected no <text> elements with corners=false"
+            );
+        }
+    }
+
+    // corners=false: corner pips still rendered (same d= count as corners=true)
+    #[test]
+    fn corners_false_preserves_pip_count() {
+        let cards: &[(u32, &str)] = &[
+            (0x11 << 8, "2s"),
+            (0x15 << 8, "6s"),
+            (0x18 << 8, "10s"),
+            (0x19 << 8, "Js"),
+            (0x1C << 8, "As"),
+        ];
+        for &(card, name) in cards {
+            let with_corners = card_svg(card, true).matches(" d=\"").count();
+            let no_corners = card_svg(card, false).matches(" d=\"").count();
+            assert_eq!(
+                with_corners, no_corners,
+                "{name}: d= count changed between corners=true ({with_corners}) and corners=false ({no_corners})"
+            );
+        }
+    }
+
+    // number cards: exact pip counts (border=1, corner pips=2, center pips per rank)
+    #[test]
+    fn number_card_exact_pip_counts() {
+        // key = (suit << 4) | rank; rank 0=2-card .. 8=10-card
+        let cases: &[(u32, usize, &str)] = &[
+            (0x10 << 8, 2, "2s"),
+            (0x11 << 8, 3, "3s"),
+            (0x12 << 8, 4, "4s"),
+            (0x13 << 8, 5, "5s"),
+            (0x14 << 8, 6, "6s"),
+            (0x15 << 8, 7, "7s"),
+            (0x16 << 8, 8, "8s"),
+            (0x17 << 8, 9, "9s"),
+            (0x18 << 8, 10, "10s"),
+        ];
+        for &(card, center_pips, name) in cases {
+            let svg = card_svg(card, true);
+            let d_count = svg.matches(" d=\"").count();
+            let expected = 1 + 2 + center_pips; // border + corners + center
+            assert_eq!(
+                d_count, expected,
+                "{name}: expected {expected} d= attrs, got {d_count}"
+            );
+        }
+    }
+
+    // red suits (hearts, diamonds) use red fill; black suits (spades, clubs) use black fill
+    #[test]
+    fn suit_fill_colors() {
+        for card in [0x2C << 8u32, 0x4C << 8] {
+            assert!(
+                card_svg(card, true).contains("#df0000"),
+                "red suit missing red fill"
+            );
+        }
+        for card in [0x1C << 8u32, 0x8C << 8] {
+            assert!(
+                card_svg(card, true).contains("#000000"),
+                "black suit missing black fill"
+            );
+        }
+    }
+
+    // card=0 and invalid suit both render the card back (identified by back pattern id)
+    #[test]
+    fn back_rendered_for_zero_and_invalid_suit() {
+        for card in [0u32, 0x31 << 8] {
+            let svg = card_svg(card, true);
+            assert!(svg.contains("Strips1_1"), "expected card back pattern");
+            assert!(
+                !svg.contains("<text"),
+                "card back should not contain rank text"
+            );
+        }
+    }
+
+    // diamonds force all center pip flips to false; no negative matrix scale in SVG.
+    // other suits have at least one flipped pip (matrix(-...) present).
+    #[test]
+    fn diamond_pips_never_flipped() {
+        // 7 of diamonds: rank=5, has bottom pips that would flip in non-diamond suits
+        let diamond = card_svg(0x45 << 8, true);
+        assert!(
+            !diamond.contains("matrix(-"),
+            "diamond card should have no negated pip matrix"
+        );
+        // same rank in spades must have at least one flipped pip for contrast
+        let spades = card_svg(0x15 << 8, true);
+        assert!(
+            spades.contains("matrix(-"),
+            "spades card should have at least one negated pip matrix"
+        );
+    }
+
+    // corners=false swaps corner pip tx positions relative to corners=true.
+    // uses spades tl_tx=16.929041 and br_tx=150.22511 as sentinels.
+    #[test]
+    fn corners_false_mirrors_corner_pip_positions() {
+        let card = 0x15 << 8u32; // 7 of spades
+        let svg_true = card_svg(card, true);
+        let svg_false = card_svg(card, false);
+
+        let tl_true = svg_true
+            .find("16.929041")
+            .expect("tl_tx missing in corners=true");
+        let br_true = svg_true
+            .find("150.22511")
+            .expect("br_tx missing in corners=true");
+        assert!(
+            tl_true < br_true,
+            "corners=true: expected tl_tx before br_tx"
+        );
+
+        let br_false = svg_false
+            .find("150.22511")
+            .expect("br_tx missing in corners=false");
+        let tl_false = svg_false
+            .find("16.929041")
+            .expect("tl_tx missing in corners=false");
+        assert!(
+            br_false < tl_false,
+            "corners=false: expected br_tx before tl_tx"
+        );
+    }
+
+    // corners=false pip count unchanged for aces and face cards (corner pips still present)
+    #[test]
+    fn corners_false_preserves_pip_count_ace_and_face() {
+        let cards: &[(u32, &str)] = &[
+            (0x1C << 8, "As"),
+            (0x2C << 8, "Ah"),
+            (0x4C << 8, "Ad"),
+            (0x8C << 8, "Ac"),
+            (0x19 << 8, "Js"),
+            (0x2A << 8, "Qh"),
+            (0x4B << 8, "Kd"),
+            (0x8B << 8, "Kc"),
+        ];
+        for &(card, name) in cards {
+            let with_corners = card_svg(card, true).matches(" d=\"").count();
+            let no_corners = card_svg(card, false).matches(" d=\"").count();
+            assert_eq!(
+                with_corners, no_corners,
+                "{name}: d= count changed between corners=true ({with_corners}) and corners=false ({no_corners})"
+            );
+        }
+    }
+
+    // all 12 face cards produce non-trivial SVG (face artwork embedded)
+    #[test]
+    fn face_cards_all_twelve() {
+        let face_cards: &[(u32, &str)] = &[
+            (0x19 << 8, "Js"),
+            (0x1A << 8, "Qs"),
+            (0x1B << 8, "Ks"),
+            (0x29 << 8, "Jh"),
+            (0x2A << 8, "Qh"),
+            (0x2B << 8, "Kh"),
+            (0x49 << 8, "Jd"),
+            (0x4A << 8, "Qd"),
+            (0x4B << 8, "Kd"),
+            (0x89 << 8, "Jc"),
+            (0x8A << 8, "Qc"),
+            (0x8B << 8, "Kc"),
+        ];
+        for &(card, name) in face_cards {
+            let svg = card_svg(card, true);
+            assert!(
+                svg.len() > 10_000,
+                "{name}: face card SVG suspiciously small ({} bytes)",
+                svg.len()
+            );
+            assert!(svg.ends_with("</svg>"), "{name}: expected SVG close tag");
+        }
+    }
+
+    // rank_text places the top label at y=28 with cx as x, and the bottom label at
+    // y=-214.5 under scale(-1,-1) with x mirrored as -(167.087 - cx).
+    // uses spades Jack: tl_tx=16.929041, bottom x=-(167.087-16.929041)=-150.158
+    #[test]
+    fn rank_text_coordinates() {
+        let card = 0x19 << 8u32; // Jack of spades
+        let svg = card_svg(card, true);
+
+        assert!(
+            svg.contains("x=\"16.929\" y=\"28\""),
+            "top label x/y mismatch"
+        );
+        assert!(
+            svg.contains("transform=\"scale(-1,-1)\""),
+            "bottom label missing scale transform"
+        );
+        assert!(
+            svg.contains("x=\"-150.158\" y=\"-214.5\""),
+            "bottom label x/y mismatch"
+        );
+
+        let svg_no_corners = card_svg(card, false);
+        assert!(
+            !svg_no_corners.contains("y=\"28\""),
+            "corners=false should not have top label"
+        );
+        assert!(
+            !svg_no_corners.contains("y=\"-214.5\""),
+            "corners=false should not have bottom label"
+        );
+    }
+
+    // rank_label covers all 13 ranks; each must produce exactly 2 matching text elements
+    #[test]
+    fn rank_label_all_ranks() {
+        let cases: &[(u32, &str)] = &[
+            (0x10 << 8, "2"),
+            (0x11 << 8, "3"),
+            (0x12 << 8, "4"),
+            (0x13 << 8, "5"),
+            (0x14 << 8, "6"),
+            (0x15 << 8, "7"),
+            (0x16 << 8, "8"),
+            (0x17 << 8, "9"),
+            (0x18 << 8, "10"),
+            (0x19 << 8, "J"),
+            (0x1A << 8, "Q"),
+            (0x1B << 8, "K"),
+            (0x1C << 8, "A"),
+        ];
+        for &(card, label) in cases {
+            let svg = card_svg(card, true);
+            let count = svg.matches(&format!(">{label}</text>")).count();
+            assert_eq!(
+                count, 2,
+                "rank {label}: expected 2 text elements, got {count}"
+            );
+        }
+    }
+
+    // face_figure selects a distinct figure for each of the 12 face cards;
+    // a wrong index mapping would produce identical SVG for two different cards
+    #[test]
+    fn face_figure_all_distinct() {
+        let face_cards: &[(u32, &str)] = &[
+            (0x19 << 8, "Js"),
+            (0x1A << 8, "Qs"),
+            (0x1B << 8, "Ks"),
+            (0x29 << 8, "Jh"),
+            (0x2A << 8, "Qh"),
+            (0x2B << 8, "Kh"),
+            (0x49 << 8, "Jd"),
+            (0x4A << 8, "Qd"),
+            (0x4B << 8, "Kd"),
+            (0x89 << 8, "Jc"),
+            (0x8A << 8, "Qc"),
+            (0x8B << 8, "Kc"),
+        ];
+        let svgs: Vec<String> = face_cards
+            .iter()
+            .map(|&(card, _)| card_svg(card, true))
+            .collect();
+        for i in 0..svgs.len() {
+            for j in (i + 1)..svgs.len() {
+                assert_ne!(
+                    svgs[i], svgs[j],
+                    "{} and {} produced identical SVG",
+                    face_cards[i].1, face_cards[j].1
+                );
+            }
+        }
+    }
 }
