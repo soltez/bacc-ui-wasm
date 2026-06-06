@@ -83,13 +83,13 @@ Returns a standalone SVG string for the given card.
 ```ts
 render_bead_plate(cols: number, hex: string): string
 render_big_road(cols: number, hex: string): string
-render_derived_road(cols: number, idx: number, hex: string): string
+render_derived_road(cols: number, icon: number, hex: string): string
 ```
 
 Each returns a standalone SVG string sized to `cols * 24 x 6 * 24` pixels.
 
 - `hex` -- bacc-rs BigUint hex string (MSB = oldest entry, LSB = newest)
-- `idx` -- derived road selector: `0`=big eye boy, `1`=small road, `2`=cockroach pig
+- `icon` -- derived road selector: `0`=big eye boy, `1`=small road, `2`=cockroach pig
 
 ---
 
