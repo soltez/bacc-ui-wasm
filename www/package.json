@@ -10,7 +10,8 @@
   "keywords": [],
   "license": "LGPL-3.0-only",
   "dependencies": {
-    "bacc-ui-wasm": "file:../pkg"
+    "bacc-ui-wasm": "file:../pkg",
+    "baccarat-engine": "^1.0.0"
   },
   "devDependencies": {
     "copy-webpack-plugin": "^11.0.0",
