@@ -502,84 +502,64 @@ fn card_back_svg() -> String {
     )
 }
 
-fn ace_svg(suit: u8, corners: bool) -> String {
+fn composed_svg(suit: u8, rank: u8, center: &str, corners: bool) -> String {
     let (d, color, _, _, csx, csy, tl_tx, tl_ty, br_tx, br_ty, br_flip) = suit_data(suit);
+    let (top_tx, bot_tx) = if corners {
+        (tl_tx, br_tx)
+    } else {
+        (br_tx, tl_tx)
+    };
+    let (tl_rank, br_rank) = if corners {
+        (
+            rank_text(rank, color, tl_tx, false),
+            rank_text(rank, color, tl_tx, true),
+        )
+    } else {
+        (String::new(), String::new())
+    };
+    format!(
+        "{}{}{}{}{}{}{}</svg>",
+        SVG_OPEN,
+        card_border_layer(),
+        pip_svg(d, color, csx, csy, top_tx, tl_ty, false),
+        tl_rank,
+        center,
+        pip_svg(d, color, csx, csy, bot_tx, br_ty, br_flip),
+        br_rank,
+    )
+}
+
+fn ace_svg(suit: u8, corners: bool) -> String {
     let big = match suit {
         0x1 => ACE_BIG_PIP_S,
         0x2 => ACE_BIG_PIP_H,
         0x4 => ACE_BIG_PIP_D,
         _ => ACE_BIG_PIP_C,
     };
-    let scaled_big = format!(
+    let center = format!(
         "<g transform=\"matrix({s},0,0,{s},{tx},{ty}\">{big}</g>",
         s = ACE_PIP_SCALE,
         tx = CARD_CX * (1.0 - ACE_PIP_SCALE),
         ty = CARD_CY * (1.0 - ACE_PIP_SCALE),
     );
-    let (top_tx, bot_tx) = if corners {
-        (tl_tx, br_tx)
-    } else {
-        (br_tx, tl_tx)
-    };
-    let (tl_rank, br_rank) = if corners {
-        (
-            rank_text(12, color, tl_tx, false),
-            rank_text(12, color, tl_tx, true),
-        )
-    } else {
-        (String::new(), String::new())
-    };
-    format!(
-        "{}{}{}{}{}{}{}</svg>",
-        SVG_OPEN,
-        card_border_layer(),
-        pip_svg(d, color, csx, csy, top_tx, tl_ty, false),
-        tl_rank,
-        scaled_big,
-        pip_svg(d, color, csx, csy, bot_tx, br_ty, br_flip),
-        br_rank,
-    )
+    composed_svg(suit, 12, &center, corners)
 }
 
 fn face_svg(suit: u8, rank: u8, corners: bool) -> String {
-    let (d, color, _, _, csx, csy, tl_tx, tl_ty, br_tx, br_ty, br_flip) = suit_data(suit);
-    let rank_code = rank + 9; // rank 9=J,10=Q,11=K stored as 0..2 in this fn input
     let suit_idx = match suit {
         0x1 => 0,
         0x2 => 1,
         0x4 => 2,
         _ => 3,
     };
-    let figure = face_figure(rank as usize * 4 + suit_idx);
-    let scaled_figure = format!(
+    let figure = face_figure((rank - 9) as usize * 4 + suit_idx);
+    let center = format!(
         "<g transform=\"matrix({s},0,0,{s},{tx},{ty})\">{figure}</g>",
         s = FIGURE_SCALE,
         tx = FIGURE_TX,
         ty = FIGURE_TY,
     );
-    let (top_tx, bot_tx) = if corners {
-        (tl_tx, br_tx)
-    } else {
-        (br_tx, tl_tx)
-    };
-    let (tl_rank, br_rank) = if corners {
-        (
-            rank_text(rank_code, color, tl_tx, false),
-            rank_text(rank_code, color, tl_tx, true),
-        )
-    } else {
-        (String::new(), String::new())
-    };
-    format!(
-        "{}{}{}{}{}{}{}</svg>",
-        SVG_OPEN,
-        card_border_layer(),
-        pip_svg(d, color, csx, csy, top_tx, tl_ty, false),
-        tl_rank,
-        scaled_figure,
-        pip_svg(d, color, csx, csy, bot_tx, br_ty, br_flip),
-        br_rank,
-    )
+    composed_svg(suit, rank, &center, corners)
 }
 
 pub fn card_svg(card: u32, corners: bool) -> String {
@@ -592,7 +572,7 @@ pub fn card_svg(card: u32, corners: bool) -> String {
     }
 
     match rank {
-        9..=11 => face_svg(suit, rank - 9, corners),
+        9..=11 => face_svg(suit, rank, corners),
         12 => ace_svg(suit, corners),
         _ => {
             let (d, color, sx, sy, csx, csy, tl_tx, tl_ty, br_tx, br_ty, br_flip) = suit_data(suit);
