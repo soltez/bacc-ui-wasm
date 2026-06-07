@@ -24,16 +24,18 @@ function makePeelCard(card: number, className: string): HTMLElement {
   return wrap
 }
 
-function initPeel(wrap: HTMLElement, onReveal: () => void): void {
+function initPeel(wrap: HTMLElement, card: number, onReveal: () => void): void {
+  const rank = (card >> 8) & 0xf
+  const threshold = rank >= 9 && rank <= 11 ? 0.25 : 0.65
   const bottom = wrap.querySelector(".peel-bottom") as HTMLElement
   let done = false
   const p = new Peel(wrap, { fadeThreshold: 0.9 })
-  p.setPeelPosition(p.width - 10, p.height)
+  p.setPeelPosition(p.width * 78 / 100, p.height)
   p.setPeelPath(p.width, p.height, -p.width, p.height)
   p.handle("drag", (evt: Event, x: number, y: number) => {
     const t = (x - p.width) / -p.width
     p.setTimeAlongPath(t)
-    if (!done && p.getAmountClipped() > 0.5) {
+    if (!done && p.getAmountClipped() > threshold) {
       done = true
       p.dragHandler = undefined
       p.setPeelPosition(-p.width, p.height)
@@ -52,7 +54,7 @@ function renderInitialCards(cardsEl: HTMLElement, cards: number[], onReveal: () 
   for (let i = 0; i < 2; i++) {
     const wrap = makePeelCard(cards[i], "card-wrap")
     topRow.appendChild(wrap)
-    initPeel(wrap, onReveal)
+    initPeel(wrap, cards[i], onReveal)
   }
 }
 
@@ -62,7 +64,7 @@ function renderThirdCard(cardsEl: HTMLElement, card: number, onReveal: () => voi
   cardsEl.appendChild(botRow)
   const wrap = makePeelCard(card, "card-wrap rotated")
   botRow.appendChild(wrap)
-  initPeel(wrap, onReveal)
+  initPeel(wrap, card, onReveal)
 }
 
 function renderTable(round: Round, onAllRevealed: () => void): void {
