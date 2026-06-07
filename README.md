@@ -1,7 +1,7 @@
 # bacc-ui-wasm
 
 Rust/WebAssembly visualization primitives for baccarat data produced by
-[bacc-rs](https://github.com/soltez/bacc-rs) and [bacc-js](https://github.com/soltez/bacc-js).
+[bacc-rs](https://github.com/soltez/bacc-rs) and [bacc-ts](https://github.com/soltez/bacc-ts).
 
 The crate exposes two categories of building blocks:
 
@@ -12,7 +12,7 @@ The crate exposes two categories of building blocks:
   hex-encoded road strings in the bacc-rs format.
 
 The `www/` directory contains a reference frontend that wires these primitives
-to a game source, using [bacc-js](https://github.com/soltez/bacc-js) as the
+to a game source, using [bacc-ts](https://github.com/soltez/bacc-ts) as the
 client-side engine.
 
 ---
@@ -41,7 +41,7 @@ cd www && npm start
 ```
 
 Opens the dev server at http://localhost:8080. By default the frontend runs
-fully client-side using bacc-js.
+fully client-side using bacc-ts.
 
 ## Test
 
@@ -95,8 +95,8 @@ Each returns a standalone SVG string sized to `cols * 24 x 6 * 24` pixels.
 
 ## Using a bacc-rs server as the data source
 
-The `GameSource` class from [bacc-js](https://github.com/soltez/bacc-js)
-abstracts over local and remote data. To switch from the bacc-js local engine
+The `GameSource` class from [bacc-ts](https://github.com/soltez/bacc-ts)
+abstracts over local and remote data. To switch from the bacc-ts local engine
 to a running [bacc-server](https://github.com/soltez/bacc-server) instance:
 
 ```diff
