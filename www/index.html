@@ -59,8 +59,11 @@
       .hand-cards { flex-direction: column; gap: 6px; min-height: 178px; }
       .hand-row { display: flex; flex-direction: row; gap: 6px; }
       .hand-row.centered { justify-content: center; }
-      .card-wrap { flex-shrink: 0; }
+      .card-wrap { flex-shrink: 0; position: relative; width: 70px; height: 101.7px; overflow: hidden; }
       .card-wrap svg { display: block; width: 70px; height: auto; }
+      .peel-layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; }
+      .peel-bottom { opacity: 0; }
+      .peel-svg-clip-element { position: absolute; top: -10000px; left: -10000px; width: 1px; height: 1px; opacity: 0; }
       .card-wrap.rotated {
         position: relative;
         flex-shrink: 0;
