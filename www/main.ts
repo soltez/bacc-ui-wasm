@@ -1,46 +1,108 @@
 import { GameSource, renderScoreboard, ScoreboardJson, Round } from "./bacc/api"
 import { render_card } from "./wasm"
+import { Peel } from "peel.js"
 
 const DERIVED_IDS = ["big-eye-boy", "small-road", "cockroach-pig"]
 
 const source = new GameSource()
 
-function renderHand(cardsEl: HTMLElement, valueEl: HTMLElement, cards: number[], value: number): void {
+function makePeelCard(card: number, className: string): HTMLElement {
+  const wrap = document.createElement("div")
+  wrap.className = className
+  const bottom = document.createElement("div")
+  bottom.className = "peel-bottom"
+  bottom.innerHTML = render_card(card, true)
+  const back = document.createElement("div")
+  back.className = "peel-back"
+  back.innerHTML = render_card(card, false)
+  const top = document.createElement("div")
+  top.className = "peel-top"
+  top.innerHTML = render_card(0, false)
+  wrap.appendChild(bottom)
+  wrap.appendChild(back)
+  wrap.appendChild(top)
+  return wrap
+}
+
+function initPeel(wrap: HTMLElement, onReveal: () => void): void {
+  const bottom = wrap.querySelector(".peel-bottom") as HTMLElement
+  let done = false
+  const p = new Peel(wrap, { fadeThreshold: 0.9 })
+  p.setPeelPosition(p.width - 10, p.height)
+  p.setPeelPath(p.width, p.height, -p.width, p.height)
+  p.handle("drag", (evt: Event, x: number, y: number) => {
+    const t = (x - p.width) / -p.width
+    p.setTimeAlongPath(t)
+    if (!done && p.getAmountClipped() > 0.5) {
+      done = true
+      p.dragHandler = undefined
+      p.setPeelPosition(-p.width, p.height)
+      p.removeDragListeners()
+      bottom.style.opacity = "1"
+      onReveal()
+    }
+  })
+}
+
+function renderInitialCards(cardsEl: HTMLElement, cards: number[], onReveal: () => void): void {
   cardsEl.innerHTML = ""
-  valueEl.textContent = String(value)
   const topRow = document.createElement("div")
   topRow.className = "hand-row"
-  for (let i = 0; i < Math.min(cards.length, 2); i++) {
-    const wrap = document.createElement("div")
-    wrap.className = "card-wrap"
-    wrap.innerHTML = render_card(cards[i], true)
-    topRow.appendChild(wrap)
-  }
   cardsEl.appendChild(topRow)
-  if (cards.length === 3) {
-    const botRow = document.createElement("div")
-    botRow.className = "hand-row centered"
-    const wrap = document.createElement("div")
-    wrap.className = "card-wrap rotated"
-    wrap.innerHTML = render_card(cards[2], true)
-    botRow.appendChild(wrap)
-    cardsEl.appendChild(botRow)
+  for (let i = 0; i < 2; i++) {
+    const wrap = makePeelCard(cards[i], "card-wrap")
+    topRow.appendChild(wrap)
+    initPeel(wrap, onReveal)
   }
 }
 
-function renderTable(round: Round): void {
-  renderHand(
-    document.getElementById("player-cards")!,
-    document.getElementById("player-value")!,
-    round.playerCards,
-    round.playerValue,
-  )
-  renderHand(
-    document.getElementById("banker-cards")!,
-    document.getElementById("banker-value")!,
-    round.bankerCards,
-    round.bankerValue,
-  )
+function renderThirdCard(cardsEl: HTMLElement, card: number, onReveal: () => void): void {
+  const botRow = document.createElement("div")
+  botRow.className = "hand-row centered"
+  cardsEl.appendChild(botRow)
+  const wrap = makePeelCard(card, "card-wrap rotated")
+  botRow.appendChild(wrap)
+  initPeel(wrap, onReveal)
+}
+
+function renderTable(round: Round, onAllRevealed: () => void): void {
+  const playerCardsEl = document.getElementById("player-cards")!
+  const bankerCardsEl = document.getElementById("banker-cards")!
+  const thirdCount = (round.playerCards.length === 3 ? 1 : 0) + (round.bankerCards.length === 3 ? 1 : 0)
+
+  const hasPlayerThird = round.playerCards.length === 3
+  const hasBankerThird = round.bankerCards.length === 3
+
+  const showBankerThird = (onDone: () => void): void => {
+    if (!hasBankerThird) { onDone(); return }
+    renderThirdCard(bankerCardsEl, round.bankerCards[2], onDone)
+  }
+
+  let initialRevealed = 0
+  const onInitialReveal = (): void => {
+    initialRevealed++
+    if (initialRevealed < 4) return
+    if (thirdCount === 0) { onAllRevealed(); return }
+
+    if (round.isForcedThird) {
+      let thirdRevealed = 0
+      const onThirdReveal = (): void => {
+        thirdRevealed++
+        if (thirdRevealed === thirdCount) onAllRevealed()
+      }
+      if (hasPlayerThird) renderThirdCard(playerCardsEl, round.playerCards[2], onThirdReveal)
+      showBankerThird(onThirdReveal)
+    } else {
+      if (hasPlayerThird) {
+        renderThirdCard(playerCardsEl, round.playerCards[2], () => showBankerThird(onAllRevealed))
+      } else {
+        showBankerThird(onAllRevealed)
+      }
+    }
+  }
+
+  renderInitialCards(playerCardsEl, round.playerCards, onInitialReveal)
+  renderInitialCards(bankerCardsEl, round.bankerCards, onInitialReveal)
 }
 
 function render(scoreboard: ScoreboardJson): void {
@@ -56,10 +118,15 @@ function render(scoreboard: ScoreboardJson): void {
 async function nextHand(): Promise<void> {
   const btn = document.getElementById("deal") as HTMLButtonElement
   btn.disabled = true
+  document.getElementById("player-value")!.textContent = "0"
+  document.getElementById("banker-value")!.textContent = "0"
   const round = await source.nextRound()
-  renderTable(round)
-  render(await source.getScoreboard())
-  btn.disabled = false
+  renderTable(round, async () => {
+    document.getElementById("player-value")!.textContent = String(round.playerValue)
+    document.getElementById("banker-value")!.textContent = String(round.bankerValue)
+    render(await source.getScoreboard())
+    btn.disabled = false
+  })
 }
 
 render({ bead_plate: "0", big_road: "0", derived_roads: ["0", "0", "0"] })
