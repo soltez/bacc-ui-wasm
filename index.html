@@ -92,6 +92,8 @@
       .peel-layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%; }
       .peel-bottom { opacity: 0; }
       .peel-svg-clip-element { position: absolute; top: -10000px; left: -10000px; width: 1px; height: 1px; opacity: 0; }
+      .pred-row { align-items: center; gap: 8px; margin-bottom: 8px; }
+      #prediction svg { display: block; }
       .card-wrap.rotated {
         position: relative;
         flex-shrink: 0;
@@ -128,6 +130,10 @@
         <button id="deal">Deal</button>
       </div>
       <div class="scoreboard">
+        <div class="row pred-row">
+          <span class="hand-label">Next</span>
+          <div id="prediction"></div>
+        </div>
         <div class="row">
           <div class="panel" style="flex: 1">
             <div id="bead-plate"></div>
