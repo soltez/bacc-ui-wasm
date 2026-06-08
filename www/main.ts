@@ -26,7 +26,7 @@ function makePeelCard(card: number, className: string): HTMLElement {
 
 function initPeel(wrap: HTMLElement, card: number, onReveal: () => void): void {
   const rank = (card >> 8) & 0xf
-  const threshold = rank >= 9 && rank <= 11 ? 0.25 : 0.65
+  const threshold = rank >= 9 && rank <= 11 ? 0.25 : 0.5
   const bottom = wrap.querySelector(".peel-bottom") as HTMLElement
   let done = false
   const p = new Peel(wrap, { fadeThreshold: 0.9 })
