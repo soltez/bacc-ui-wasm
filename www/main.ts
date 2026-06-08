@@ -1,5 +1,5 @@
 import { GameSource, renderScoreboard, ScoreboardJson, Round } from "./bacc/api"
-import { render_card } from "./wasm"
+import { render_card, render_prediction } from "./wasm"
 import { Peel } from "peel.js"
 
 const DERIVED_IDS = ["big-eye-boy", "small-road", "cockroach-pig"]
@@ -117,6 +117,11 @@ function render(scoreboard: ScoreboardJson): void {
   }
 }
 
+function renderPrediction(bigRoadHex: string | null): void {
+  const el = document.getElementById("prediction")!
+  el.innerHTML = bigRoadHex ? render_prediction(bigRoadHex, false) : ""
+}
+
 async function nextHand(): Promise<void> {
   const btn = document.getElementById("deal") as HTMLButtonElement
   btn.disabled = true
@@ -126,10 +131,13 @@ async function nextHand(): Promise<void> {
   renderTable(round, async () => {
     document.getElementById("player-value")!.textContent = String(round.playerValue)
     document.getElementById("banker-value")!.textContent = String(round.bankerValue)
-    render(await source.getScoreboard())
+    const scoreboard = await source.getScoreboard()
+    render(scoreboard)
+    renderPrediction(scoreboard.big_road)
     btn.disabled = false
   })
 }
 
 render({ bead_plate: "0", big_road: "0", derived_roads: ["0", "0", "0"] })
+renderPrediction("0")
 document.getElementById("deal")!.addEventListener("click", nextHand)

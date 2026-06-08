@@ -3,13 +3,16 @@
 Rust/WebAssembly visualization primitives for baccarat data produced by
 [bacc-rs](https://github.com/soltez/bacc-rs) and [bacc-ts](https://github.com/soltez/bacc-ts).
 
-The crate exposes two categories of building blocks:
+The crate exposes three categories of building blocks:
 
 - **Card renderer** -- generates a standalone SVG for any playing card or card
   back, given a Cactus Kev u32 card integer.
 - **Road renderers** -- generate standalone SVGs for the bead plate, big road,
   and the three derived roads (big eye boy, small road, cockroach pig), given
   hex-encoded road strings in the bacc-rs format.
+- **Prediction renderer** -- generates a standalone SVG showing derived road
+  prediction icons for the next player and banker outcomes, given the big road
+  hex string.
 
 The `www/` directory contains a reference frontend that wires these primitives
 to a game source, using [bacc-ts](https://github.com/soltez/bacc-ts) as the
@@ -90,6 +93,31 @@ Each returns a standalone SVG string sized to `cols * 24 x 6 * 24` pixels.
 
 - `hex` -- bacc-rs BigUint hex string (MSB = oldest entry, LSB = newest)
 - `icon` -- derived road selector: `0`=big eye boy, `1`=small road, `2`=cockroach pig
+
+### Prediction rendering
+
+```ts
+render_prediction(big_road_hex: string, vertical: boolean): string
+```
+
+Returns a standalone SVG showing derived road prediction icons for the next outcome.
+
+- `big_road_hex` -- same big road hex string passed to `render_big_road`
+- `vertical` -- controls layout orientation (see below)
+
+**Horizontal layout** (`vertical=false`): 4 cols x 2 rows (`4*24 x 2*24` px).
+
+- Row 0 (banker): `[B label | BEB-B | SR-B | CP-B]`
+- Row 1 (player): `[P label | BEB-P | SR-P | CP-P]`
+
+**Vertical layout** (`vertical=true`): 2 cols x 4 rows (`2*24 x 4*24` px).
+
+- Col 0 (banker): `[B label, BEB-B, SR-B, CP-B]`
+- Col 1 (player): `[P label, BEB-P, SR-P, CP-P]`
+
+Each icon uses the derived road marker for its road (big eye boy = hollow
+circle, small road = filled circle, cockroach pig = slash). Red = trending,
+blue = chaotic, empty = insufficient data (fewer than 2 big road columns).
 
 ---
 
