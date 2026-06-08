@@ -110,7 +110,7 @@ fn decode_big_road_columns(bytes: &[u8]) -> Vec<Vec<(u8, u8)>> {
         let row_count = bytes[pos] as usize;
         // Allow pos + 1 == row_count * 2: the leading ttttvvvv of the oldest row
         // may be a zero byte dropped by BigUint::to_str_radix when it was the MSB.
-        if row_count == 0 || pos + 1 < row_count * 2 {
+        if row_count == 0 {
             break;
         }
         let mut rows = Vec::with_capacity(row_count);
@@ -261,12 +261,8 @@ fn write_bead_plate_cell(out: &mut String, col: usize, row: usize, lo_byte: u8, 
         return;
     }
     let outcome = lo_byte & 0x03;
-    if outcome == 0 {
-        return;
-    }
+    let any_pair = lo_byte & 0x0c;
     let hand_value = hi_byte & 0x0f;
-    let player_pair = (lo_byte >> 2) & 0x01;
-    let banker_pair = (lo_byte >> 3) & 0x01;
 
     write_solid_marker(
         out,
@@ -276,75 +272,80 @@ fn write_bead_plate_cell(out: &mut String, col: usize, row: usize, lo_byte: u8, 
         &hand_value.to_string(),
     );
 
-    if banker_pair == 0 && player_pair == 0 {
-        return;
-    }
-    let cx = (col * CELL + CELL / 2) as f64;
-    let cy = (row * CELL + CELL / 2) as f64;
-    let dot_r = (CELL as f64 * 0.16).max(2.0);
-    let half = (CELL / 2) as f64;
-    let pad = dot_r + 1.0;
-
-    if banker_pair != 0 {
-        out.push_str(&format!(
-            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
-            cx - half + pad, cy - half + pad, dot_r, COLOR_BANKER
-        ));
-    }
-    if player_pair != 0 {
-        out.push_str(&format!(
-            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
-            cx + half - pad, cy + half - pad, dot_r, COLOR_PLAYER
-        ));
+    if any_pair != 0 {
+        let cx = (col * CELL + CELL / 2) as f64;
+        let cy = (row * CELL + CELL / 2) as f64;
+        let dot_r = (CELL as f64 * 0.16).max(2.0);
+        let half = (CELL / 2) as f64;
+        let pad = dot_r + 1.0;
+        for (flag, dot_cx, dot_cy, color) in [
+            (
+                (any_pair & 0x08) != 0,
+                cx - half + pad,
+                cy - half + pad,
+                COLOR_BANKER,
+            ),
+            (
+                (any_pair & 0x04) != 0,
+                cx + half - pad,
+                cy + half - pad,
+                COLOR_PLAYER,
+            ),
+        ] {
+            if !flag {
+                continue;
+            }
+            out.push_str(&format!(
+                "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
+                dot_cx, dot_cy, dot_r, color
+            ));
+        }
     }
 }
 
 fn write_big_road_cell(out: &mut String, col: usize, row: usize, bead_byte: u8, aux_byte: u8) {
-    let tie_count = (aux_byte >> 4) as u32;
-    if bead_byte == 0 && tie_count == 0 {
+    if bead_byte == 0 {
         return;
     }
 
     let outcome = bead_byte & 0x03;
-    let player_pair = (bead_byte >> 2) & 0x01;
-    let banker_pair = (bead_byte >> 3) & 0x01;
-    let hand_value = aux_byte & 0x0f;
-    let is_natural = ((bead_byte >> 4) & 0x03) == 0 && hand_value >= 8;
+    let player_pair = (bead_byte & 0x04) != 0;
+    let banker_pair = (bead_byte & 0x08) != 0;
+    let is_natural = (bead_byte & 0x30) == 0 && (aux_byte & 0x08) != 0;
+    let tie_count = (aux_byte >> 4) as u32;
 
     let cx = (col * CELL + CELL / 2) as f64;
     let cy = (row * CELL + CELL / 2) as f64;
     let r = CELL as f64 * 0.43;
 
-    if bead_byte != 0 {
-        let color = marker_color(outcome);
+    let color = marker_color(outcome);
+    out.push_str(&format!(
+        "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"2.2\"/>",
+        cx, cy, r, color
+    ));
+    if is_natural {
         out.push_str(&format!(
-            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"2.2\"/>",
-            cx, cy, r, color
+            "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
+            cx,
+            cy,
+            r * 0.65,
+            COLOR_NATURAL
         ));
-        if is_natural {
-            out.push_str(&format!(
-                "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
-                cx,
-                cy,
-                r * 0.65,
-                COLOR_NATURAL
-            ));
-        }
+    }
 
-        let dot_r = (CELL as f64 * 0.16).max(2.0);
-        let diag = r * std::f64::consts::SQRT_2 / 2.0;
-        if banker_pair != 0 {
-            out.push_str(&format!(
-                "<circle cx=\"{:.2}\" cy=\"{:.2}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
-                cx - diag, cy - diag, dot_r, COLOR_BANKER
-            ));
+    let dot_r = (CELL as f64 * 0.16).max(2.0);
+    let diag = r * std::f64::consts::SQRT_2 / 2.0;
+    for (flag, dot_cx, dot_cy, color) in [
+        (banker_pair, cx - diag, cy - diag, COLOR_BANKER),
+        (player_pair, cx + diag, cy + diag, COLOR_PLAYER),
+    ] {
+        if !flag {
+            continue;
         }
-        if player_pair != 0 {
-            out.push_str(&format!(
-                "<circle cx=\"{:.2}\" cy=\"{:.2}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
-                cx + diag, cy + diag, dot_r, COLOR_PLAYER
-            ));
-        }
+        out.push_str(&format!(
+            "<circle cx=\"{:.2}\" cy=\"{:.2}\" r=\"{}\" fill=\"{}\" stroke=\"white\" stroke-width=\"1\"/>",
+            dot_cx, dot_cy, dot_r, color
+        ));
     }
 
     if tie_count >= 1 {
@@ -544,8 +545,9 @@ pub fn render_card(card: u32, corners: bool) -> String {
 mod tests {
     use super::{
         compute_prediction_markers, decode_big_road_columns, decode_derived_road_runs,
-        hex_to_bytes, parse_bead_plate, parse_big_road, parse_derived_road, render_prediction,
-        simulate,
+        hex_to_bytes, marker_color, parse_bead_plate, parse_big_road, parse_derived_road,
+        render_bead_plate, render_big_road, render_derived_road, render_prediction, simulate,
+        write_bead_plate_cell, write_big_road_cell, write_derived_cell, write_solid_marker,
     };
 
     use rstest::rstest;
@@ -790,6 +792,212 @@ mod tests {
         assert_eq!(parse_derived_road(cols, hex).to_vec(), expected);
     }
 
+    // marker_color
+
+    #[test]
+    fn marker_color_player_returns_player_color() {
+        assert_eq!(marker_color(1), "#1a1abd");
+    }
+
+    #[test]
+    fn marker_color_banker_returns_banker_color() {
+        assert_eq!(marker_color(2), "#7c1e28");
+    }
+
+    #[test]
+    fn marker_color_tie_returns_tie_color() {
+        assert_eq!(marker_color(3), "#448726");
+    }
+
+    #[test]
+    fn marker_color_unknown_returns_grey() {
+        assert_eq!(marker_color(0), "#888888");
+        assert_eq!(marker_color(4), "#888888");
+    }
+
+    // write_solid_marker
+
+    #[test]
+    fn write_solid_marker_emits_filled_circle_and_text() {
+        let mut out = String::new();
+        write_solid_marker(&mut out, 0, 0, "#1a1abd", "P");
+        assert!(out.contains("<circle"), "circle present");
+        assert!(out.contains("fill=\"#1a1abd\""), "circle fill color");
+        assert!(!out.contains("fill=\"none\""), "filled not hollow");
+        assert!(out.contains(">P<"), "letter in text element");
+    }
+
+    // write_bead_plate_cell
+
+    #[test]
+    fn write_bead_plate_cell_lo_byte_zero_emits_nothing() {
+        let mut out = String::new();
+        write_bead_plate_cell(&mut out, 0, 0, 0x00, 0x00);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn write_bead_plate_cell_no_pairs_emits_no_pair_dots() {
+        // outcome=1 (player), no pairs
+        let mut out = String::new();
+        write_bead_plate_cell(&mut out, 0, 0, 0x01, 0x05);
+        assert!(out.contains("<circle"), "main circle present");
+        assert!(!out.contains("stroke-width=\"1\""), "no pair dots");
+    }
+
+    #[test]
+    fn write_bead_plate_cell_banker_pair_emits_banker_dot() {
+        // outcome=2 (banker), banker_pair bit set (bit 3)
+        let mut out = String::new();
+        write_bead_plate_cell(&mut out, 0, 0, 0b00001010, 0x00);
+        assert!(out.contains("#7c1e28"), "banker pair dot color");
+    }
+
+    #[test]
+    fn write_bead_plate_cell_player_pair_emits_player_dot() {
+        // outcome=1 (player), player_pair bit set (bit 2)
+        let mut out = String::new();
+        write_bead_plate_cell(&mut out, 0, 0, 0b00000101, 0x00);
+        assert!(out.contains("#1a1abd"), "player pair dot color");
+    }
+
+    #[test]
+    fn write_bead_plate_cell_both_pairs_emits_both_dots() {
+        // outcome=1, both pair bits set
+        let mut out = String::new();
+        write_bead_plate_cell(&mut out, 0, 0, 0b00001101, 0x00);
+        assert!(out.contains("#7c1e28"), "banker pair dot");
+        assert!(out.contains("#1a1abd"), "player pair dot");
+    }
+
+    // write_big_road_cell
+
+    #[test]
+    fn write_big_road_cell_empty_emits_nothing() {
+        let mut out = String::new();
+        write_big_road_cell(&mut out, 0, 0, 0x00, 0x00);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn write_big_road_cell_natural_emits_inner_circle() {
+        // outcome=1, no third card (bits 5-4 = 0), hand_value=8 -> is_natural
+        let mut out = String::new();
+        write_big_road_cell(&mut out, 0, 0, 0x01, 0x08);
+        assert!(out.contains("#db953c"), "natural inner circle color");
+    }
+
+    #[test]
+    fn write_big_road_cell_banker_pair_emits_banker_dot() {
+        // outcome=2, banker_pair bit set (bit 3)
+        let mut out = String::new();
+        write_big_road_cell(&mut out, 0, 0, 0b00001010, 0x00);
+        assert!(out.contains("#7c1e28"), "banker pair dot");
+    }
+
+    #[test]
+    fn write_big_road_cell_player_pair_emits_player_dot() {
+        // outcome=1, player_pair bit set (bit 2)
+        let mut out = String::new();
+        write_big_road_cell(&mut out, 0, 0, 0b00000101, 0x00);
+        assert!(out.contains("#1a1abd"), "player pair dot");
+    }
+
+    #[test]
+    fn write_big_road_cell_both_pairs_emits_both_dots() {
+        // outcome=1, both pair bits set
+        let mut out = String::new();
+        write_big_road_cell(&mut out, 0, 0, 0b00001101, 0x00);
+        assert!(out.contains("#7c1e28"), "banker pair dot");
+        assert!(out.contains("#1a1abd"), "player pair dot");
+    }
+
+    #[test]
+    fn write_big_road_cell_tie_count_1_emits_line_no_text() {
+        let mut out = String::new();
+        write_big_road_cell(&mut out, 0, 0, 0x01, 0x10);
+        assert!(out.contains("<line"), "tie line for count=1");
+        assert!(!out.contains("<text"), "no tie text for count=1");
+    }
+
+    #[test]
+    fn write_big_road_cell_tie_count_2_emits_line_and_text() {
+        let mut out = String::new();
+        write_big_road_cell(&mut out, 0, 0, 0x01, 0x20);
+        assert!(out.contains("<line"), "tie line for count=2");
+        assert!(out.contains("<text"), "tie text for count=2");
+    }
+
+    // write_derived_cell
+
+    #[test]
+    fn write_derived_cell_marker_zero_emits_nothing() {
+        let mut out = String::new();
+        write_derived_cell(&mut out, 0, 0, 0, 0);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn write_derived_cell_icon_0_emits_hollow_circle() {
+        let mut out = String::new();
+        write_derived_cell(&mut out, 0, 0, 1, 0);
+        assert!(out.contains("fill=\"none\""), "hollow circle");
+    }
+
+    #[test]
+    fn write_derived_cell_icon_1_emits_filled_circle() {
+        let mut out = String::new();
+        write_derived_cell(&mut out, 0, 0, 1, 1);
+        assert!(!out.contains("fill=\"none\""), "no hollow circle");
+        assert!(out.contains("<circle"), "filled circle");
+    }
+
+    #[test]
+    fn write_derived_cell_icon_other_emits_slash_line() {
+        let mut out = String::new();
+        write_derived_cell(&mut out, 0, 0, 1, 2);
+        assert!(out.contains("<line"), "slash line");
+    }
+
+    // render_* smoke tests
+
+    #[test]
+    fn render_bead_plate_smoke() {
+        let svg = render_bead_plate(6, "0");
+        assert!(svg.starts_with("<svg"), "valid SVG");
+        assert!(
+            svg.contains("width=\"144\" height=\"144\""),
+            "6 cols x 6 rows"
+        );
+    }
+
+    #[test]
+    fn render_big_road_smoke() {
+        let svg = render_big_road(6, "0");
+        assert!(svg.starts_with("<svg"), "valid SVG");
+        assert!(
+            svg.contains("width=\"144\" height=\"144\""),
+            "6 cols x 6 rows"
+        );
+    }
+
+    #[test]
+    fn render_derived_road_smoke() {
+        let svg = render_derived_road(6, 0, "0");
+        assert!(svg.starts_with("<svg"), "valid SVG");
+        assert!(
+            svg.contains("width=\"144\" height=\"144\""),
+            "6 cols x 6 rows"
+        );
+    }
+
+    #[test]
+    fn render_card_smoke() {
+        // card=0 renders card back
+        let svg = crate::svg_playing_cards::card_svg(0, false);
+        assert!(svg.starts_with("<svg"), "valid SVG");
+    }
+
     // compute_prediction_markers:
     //   out[i] = 2 (red/trending) when (current_height == ref_height) == (next != current)
     //   out[i] = 1 (blue/chaotic) otherwise
@@ -836,6 +1044,13 @@ mod tests {
         // 2 cols x 4 rows = 48 x 96
         let svg = render_prediction("0", true);
         assert!(svg.contains("width=\"48\" height=\"96\""));
+    }
+
+    #[test]
+    fn render_prediction_vertical_p_label_at_col1_row0() {
+        // vertical: B at (col=0,row=0) cx=12 cy=12, P at (col=1,row=0) cx=36 cy=12
+        let svg = render_prediction("0", true);
+        assert!(svg.contains("x=\"36\" y=\"12\""), "P in col 1 row 0");
     }
 
     // render_prediction: B and P labels always present
@@ -900,6 +1115,25 @@ mod tests {
             svg.contains("fill=\"none\" stroke=\"#1a1abd\""),
             "blue hollow BEB circle (chaotic)"
         );
+    }
+
+    // render_prediction: vertical layout with data places icons in col 0 (banker) and col 1 (player)
+
+    #[test]
+    fn render_prediction_vertical_icons_in_correct_columns() {
+        // P,B,P,B: next_banker=blue, next_player=red
+        // vertical: banker icons at col=0 (cx=12), player icons at col=1 (cx=36)
+        let svg = render_prediction("000101000201000101000201", true);
+        assert!(
+            svg.contains("fill=\"none\" stroke=\"#1a1abd\""),
+            "blue BEB in banker col"
+        );
+        assert!(
+            svg.contains("fill=\"none\" stroke=\"#7c1e28\""),
+            "red BEB in player col"
+        );
+        assert!(svg.contains("cx=\"12\""), "banker icons at col 0");
+        assert!(svg.contains("cx=\"36\""), "player icons at col 1");
     }
 
     // render_prediction: byte-scan truncation exits via count==4 (more than 4 columns)
