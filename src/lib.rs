@@ -240,6 +240,22 @@ fn write_svg_header(out: &mut String, cols: usize, step: usize) {
     }
 }
 
+fn write_solid_marker(out: &mut String, col: usize, row: usize, color: &str, letter: &str) {
+    let cx = (col * CELL + CELL / 2) as f64;
+    let cy = (row * CELL + CELL / 2) as f64;
+    let r = CELL as f64 * 0.43;
+    let font_size = (r * 1.3).round() as usize;
+    out.push_str(&format!(
+        "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
+        cx, cy, r, color
+    ));
+    out.push_str(&format!(
+        "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" dominant-baseline=\"central\" \
+        fill=\"white\" font-weight=\"bold\" font-size=\"{}\" font-family=\"sans-serif\">{}</text>",
+        cx, cy, font_size, letter
+    ));
+}
+
 fn write_bead_plate_cell(out: &mut String, col: usize, row: usize, lo_byte: u8, hi_byte: u8) {
     if lo_byte == 0 {
         return;
@@ -252,27 +268,22 @@ fn write_bead_plate_cell(out: &mut String, col: usize, row: usize, lo_byte: u8, 
     let player_pair = (lo_byte >> 2) & 0x01;
     let banker_pair = (lo_byte >> 3) & 0x01;
 
-    let cx = col * CELL + CELL / 2;
-    let cy = row * CELL + CELL / 2;
-    let r = CELL as f64 * 0.43;
-    let color = marker_color(outcome);
-    let font_size = (r * 1.3).round() as usize;
+    write_solid_marker(
+        out,
+        col,
+        row,
+        marker_color(outcome),
+        &hand_value.to_string(),
+    );
 
-    out.push_str(&format!(
-        "<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"{}\"/>",
-        cx, cy, r, color
-    ));
-    out.push_str(&format!(
-        "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" dominant-baseline=\"central\" \
-        fill=\"white\" font-weight=\"bold\" font-size=\"{}\" font-family=\"sans-serif\">{}</text>",
-        cx, cy, font_size, hand_value
-    ));
-
+    if banker_pair == 0 && player_pair == 0 {
+        return;
+    }
+    let cx = (col * CELL + CELL / 2) as f64;
+    let cy = (row * CELL + CELL / 2) as f64;
     let dot_r = (CELL as f64 * 0.16).max(2.0);
     let half = (CELL / 2) as f64;
     let pad = dot_r + 1.0;
-    let cx = cx as f64;
-    let cy = cy as f64;
 
     if banker_pair != 0 {
         out.push_str(&format!(
@@ -381,6 +392,28 @@ fn write_derived_cell(out: &mut String, col: usize, row: usize, marker: u8, icon
     }
 }
 
+// Same rule as compute_prediction in bacc-cli/src/model/stats.rs.
+// next_marker: 1=player, 2=banker. Returns [BEB, SR, CP]: 2=red/trend, 1=blue/chaos, 0=no data.
+fn compute_prediction_markers(
+    current_marker: u8,
+    current_height: u8,
+    refs: &[Option<(u8, u8)>; 3],
+    next_marker: u8,
+) -> [u8; 3] {
+    let flips = next_marker != current_marker;
+    let mut out = [0u8; 3];
+    for (i, ref_col) in refs.iter().enumerate() {
+        if let Some((_, ref_height)) = ref_col {
+            out[i] = if (current_height == *ref_height) == flips {
+                2
+            } else {
+                1
+            };
+        }
+    }
+    out
+}
+
 #[wasm_bindgen]
 pub fn render_bead_plate(cols: u32, hex: &str) -> String {
     utils::set_panic_hook();
@@ -431,6 +464,76 @@ pub fn render_derived_road(cols: u32, icon: u8, hex: &str) -> String {
     out
 }
 
+// Renders an 8-icon SVG showing derived road prediction for next=banker and next=player.
+// vertical=false: 4 cols x 2 rows. Row 0=banker (B,BEB-B,SR-B,CP-B), row 1=player (P,BEB-P,SR-P,CP-P).
+// vertical=true:  2 cols x 4 rows. Col 0=banker (B,BEB-B,SR-B,CP-B), col 1=player (P,BEB-P,SR-P,CP-P).
+// Red icon = trending, blue icon = chaotic, empty = insufficient data.
+#[wasm_bindgen]
+pub fn render_prediction(big_road_hex: &str, vertical: bool) -> String {
+    utils::set_panic_hook();
+    let bytes = hex_to_bytes(big_road_hex);
+    // Scan right-to-left, collecting (marker, height) for up to 4 columns.
+    // Index 0 = newest (current), 1-3 = refs for BEB/SR/CP.
+    // marker = oldest row's outcome bits (& 0x03); oldest bead sits at bytes[pos+1 - row_count*2].
+    let mut col_heights: [Option<(u8, u8)>; 4] = [None; 4];
+    {
+        let mut pos = bytes.len();
+        let mut count = 0usize;
+        while pos > 0 && count < 4 {
+            pos -= 1;
+            let row_count = bytes[pos] as usize;
+            if row_count == 0 {
+                break;
+            }
+            pos -= row_count * 2 - 1;
+            let oldest_bead = bytes[pos];
+            col_heights[count] = Some((oldest_bead & 0x03, row_count as u8));
+            pos -= 1;
+            count += 1;
+        }
+    }
+    let refs = [col_heights[1], col_heights[2], col_heights[3]];
+    let (w, h) = if vertical {
+        (2 * CELL, 4 * CELL)
+    } else {
+        (4 * CELL, 2 * CELL)
+    };
+    let mut out = String::new();
+    out.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\">\
+        <rect width=\"{}\" height=\"{}\" fill=\"{}\"/>",
+        w, h, w, h, w, h, COLOR_BG
+    ));
+
+    // cell(banker_idx, player_idx) maps logical position to (col, row) based on orientation.
+    let cell = |banker: usize, player: usize| -> (usize, usize) {
+        if vertical {
+            (banker, player)
+        } else {
+            (player, banker)
+        }
+    };
+
+    let (bl_col, bl_row) = cell(0, 0);
+    let (pl_col, pl_row) = cell(1, 0);
+    write_solid_marker(&mut out, bl_col, bl_row, COLOR_BANKER, "B");
+    write_solid_marker(&mut out, pl_col, pl_row, COLOR_PLAYER, "P");
+
+    if let Some((current_marker, current_height)) = col_heights[0] {
+        let next_player = compute_prediction_markers(current_marker, current_height, &refs, 1);
+        let next_banker = compute_prediction_markers(current_marker, current_height, &refs, 2);
+        for (i, &icon) in [0u8, 1u8, 2u8].iter().enumerate() {
+            let (bc, br) = cell(0, i + 1);
+            let (pc, pr) = cell(1, i + 1);
+            write_derived_cell(&mut out, bc, br, next_banker[i], icon);
+            write_derived_cell(&mut out, pc, pr, next_player[i], icon);
+        }
+    }
+
+    out.push_str("</svg>");
+    out
+}
+
 #[wasm_bindgen]
 pub fn render_card(card: u32, corners: bool) -> String {
     utils::set_panic_hook();
@@ -440,8 +543,9 @@ pub fn render_card(card: u32, corners: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_big_road_columns, decode_derived_road_runs, hex_to_bytes, parse_bead_plate,
-        parse_big_road, parse_derived_road, simulate,
+        compute_prediction_markers, decode_big_road_columns, decode_derived_road_runs,
+        hex_to_bytes, parse_bead_plate, parse_big_road, parse_derived_road, render_prediction,
+        simulate,
     };
 
     use rstest::rstest;
@@ -684,5 +788,128 @@ mod tests {
     #[case(1, "0203", vec![2, 0, 0, 0, 0, 0])]
     fn parse_derived_road_cases(#[case] cols: u32, #[case] hex: &str, #[case] expected: Vec<u8>) {
         assert_eq!(parse_derived_road(cols, hex).to_vec(), expected);
+    }
+
+    // compute_prediction_markers:
+    //   out[i] = 2 (red/trending) when (current_height == ref_height) == (next != current)
+    //   out[i] = 1 (blue/chaotic) otherwise
+    //   out[i] = 0 when ref is absent
+    #[rstest]
+    // all refs absent -> all 0
+    #[case(1, 1, [None, None, None], 2, [0, 0, 0])]
+    // no flip, same height -> blue (true == false -> false -> 1)
+    #[case(1, 3, [Some((2u8, 3u8)), None, None], 1, [1, 0, 0])]
+    // no flip, diff height -> red (false == false -> true -> 2)
+    #[case(1, 3, [Some((2u8, 2u8)), None, None], 1, [2, 0, 0])]
+    // flip, same height -> red (true == true -> true -> 2)
+    #[case(1, 3, [Some((2u8, 3u8)), None, None], 2, [2, 0, 0])]
+    // flip, diff height -> blue (false == true -> false -> 1)
+    #[case(1, 3, [Some((2u8, 2u8)), None, None], 2, [1, 0, 0])]
+    // mixed refs: first and third present, second absent
+    #[case(2, 2, [Some((1u8, 2u8)), None, Some((1u8, 3u8))], 2, [1, 0, 2])]
+    // all three refs with varying heights
+    #[case(1, 2, [Some((2u8, 2u8)), Some((2u8, 3u8)), Some((2u8, 2u8))], 2, [2, 1, 2])]
+    fn compute_prediction_markers_cases(
+        #[case] current_marker: u8,
+        #[case] current_height: u8,
+        #[case] refs: [Option<(u8, u8)>; 3],
+        #[case] next_marker: u8,
+        #[case] expected: [u8; 3],
+    ) {
+        assert_eq!(
+            compute_prediction_markers(current_marker, current_height, &refs, next_marker),
+            expected
+        );
+    }
+
+    // render_prediction: SVG dimensions
+
+    #[test]
+    fn render_prediction_horizontal_dimensions() {
+        // 4 cols x 2 rows = 96 x 48
+        let svg = render_prediction("0", false);
+        assert!(svg.contains("width=\"96\" height=\"48\""));
+    }
+
+    #[test]
+    fn render_prediction_vertical_dimensions() {
+        // 2 cols x 4 rows = 48 x 96
+        let svg = render_prediction("0", true);
+        assert!(svg.contains("width=\"48\" height=\"96\""));
+    }
+
+    // render_prediction: B and P labels always present
+
+    #[test]
+    fn render_prediction_always_has_b_and_p_labels() {
+        let svg = render_prediction("0", false);
+        assert!(svg.contains(">B<"));
+        assert!(svg.contains(">P<"));
+    }
+
+    // render_prediction: no markers when data is absent or a single column
+
+    #[test]
+    fn render_prediction_no_data_has_no_markers() {
+        // "0" -> row_count=0 -> no columns -> no markers
+        let svg = render_prediction("0", false);
+        assert!(!svg.contains("fill=\"none\""), "no hollow BEB circles");
+        assert!(!svg.contains("<line"), "no CP slash markers");
+    }
+
+    #[test]
+    fn render_prediction_one_column_has_no_markers() {
+        // one player column: aux=0x00, bead=0x01, row_count=0x01 -> "000101"
+        // get_col(0) exists but all refs are None -> all marker outputs 0
+        let svg = render_prediction("000101", false);
+        assert!(!svg.contains("fill=\"none\""), "no hollow BEB circles");
+        assert!(!svg.contains("<line"), "no CP slash markers");
+    }
+
+    // render_prediction: BEB markers appear with 2 columns; SR and CP still absent
+
+    #[test]
+    fn render_prediction_two_columns_has_beb_markers_only() {
+        // player col then banker col, one row each: "000101000201"
+        let svg = render_prediction("000101000201", false);
+        assert!(svg.contains("fill=\"none\""), "BEB hollow circles present");
+        assert!(!svg.contains("<line"), "no CP slash markers yet");
+    }
+
+    // render_prediction: all three derived road markers appear with 4 columns
+
+    #[test]
+    fn render_prediction_four_columns_has_all_markers() {
+        // P, B, P, B each one row
+        let svg = render_prediction("000101000201000101000201", false);
+        assert!(svg.contains("fill=\"none\""), "BEB hollow circles");
+        assert!(svg.contains("<line"), "CP slash markers");
+    }
+
+    // render_prediction: correct marker colors
+
+    #[test]
+    fn render_prediction_marker_colors_red_trending_blue_chaotic() {
+        // P, B, P, B: current=banker(h=1), all refs same height -> next_player=red, next_banker=blue
+        let svg = render_prediction("000101000201000101000201", false);
+        assert!(
+            svg.contains("fill=\"none\" stroke=\"#7c1e28\""),
+            "red hollow BEB circle (trending)"
+        );
+        assert!(
+            svg.contains("fill=\"none\" stroke=\"#1a1abd\""),
+            "blue hollow BEB circle (chaotic)"
+        );
+    }
+
+    // render_prediction: byte-scan truncation exits via count==4 (more than 4 columns)
+
+    #[test]
+    fn render_prediction_truncates_to_last_four_columns() {
+        // 5 columns P,B,P,B,P -- the scan exits when count reaches 4, dropping the oldest column.
+        // Result must equal passing only the last 4 columns directly.
+        let five = render_prediction("000101000201000101000201000101", false);
+        let four = render_prediction("000201000101000201000101", false);
+        assert_eq!(five, four);
     }
 }
