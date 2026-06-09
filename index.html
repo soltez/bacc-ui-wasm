@@ -52,9 +52,78 @@
         align-items: flex-start;
         gap: 24px;
         padding: 12px;
-        margin-bottom: 12px;
+        margin-bottom: 0;
       }
-      .table > button { align-self: center; margin: auto 0; }
+      .bet-row {
+        display: flex;
+        gap: 8px;
+        padding: 0 12px 6px;
+      }
+      .bet-zone {
+        flex: 1;
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 4px;
+        padding: 5px 8px;
+        min-height: 34px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        user-select: none;
+        transition: filter 0.12s;
+        margin-bottom: 6px;
+      }
+      .bet-zone:hover { filter: brightness(1.2); }
+      #bet-player { background: rgba(26,26,189,0.35); border-color: #1a1abd; }
+      #bet-tie    { background: rgba(68,135,38,0.35);  border-color: #448726; }
+      #bet-banker { background: rgba(124,30,40,0.35);  border-color: #7c1e28; }
+      .bet-zone-label { font-size: 10px; color: #bbb; text-transform: uppercase; letter-spacing: 0.05em; }
+      .bet-zone-odds { font-size: 10px; color: #999; }
+      .bet-zone-prompt { font-size: 11px; font-weight: bold; color: #ffe600; }
+      .bet-zone-amount { font-size: 13px; font-weight: bold; color: #f0d060; min-height: 16px; }
+      .control-bar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 12px;
+        background: rgba(0,0,0,0.35);
+        border-radius: 6px;
+        margin: 8px 0 12px;
+        flex-wrap: wrap;
+      }
+      .ctrl-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 66px;
+      }
+      .ctrl-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+      .ctrl-value { font-size: 15px; font-weight: bold; color: #eee; }
+      .chip-row { display: flex; gap: 6px; align-items: center; }
+      .chip-btn {
+        background: none;
+        border: 2px solid transparent;
+        border-radius: 50%;
+        padding: 2px;
+        cursor: pointer;
+        line-height: 0;
+        transition: border-color 0.12s;
+      }
+      .chip-btn.selected { border-color: #ffe600; }
+      .chip-btn:hover:not(.selected) { border-color: rgba(255,255,255,0.45); }
+      .ctrl-btn {
+        padding: 7px 16px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+      }
+      #deal { background: #1e5fc2; color: #fff; }
+      #deal:disabled { background: #3a3a3a; color: #666; cursor: not-allowed; }
+      #clear-btn { background: #4a4a4a; color: #ccc; }
+      #clear-btn:hover { background: #5a5a5a; }
       .hand {
         display: flex;
         flex-direction: column;
@@ -127,7 +196,39 @@
           </div>
           <div class="hand-cards" id="banker-cards"></div>
         </div>
-        <button id="deal">Deal</button>
+      </div>
+      <div class="bet-row">
+        <div class="bet-zone" id="bet-player">
+          <span class="bet-zone-label">Player</span>
+          <span class="bet-zone-odds">1 to 1</span>
+          <span class="bet-zone-prompt" id="bet-prompt-player" style="visibility:hidden">Click here</span>
+          <span class="bet-zone-amount" id="bet-amount-player"></span>
+        </div>
+        <div class="bet-zone" id="bet-tie">
+          <span class="bet-zone-label">Tie</span>
+          <span class="bet-zone-odds">8 to 1</span>
+          <span class="bet-zone-prompt" id="bet-prompt-tie" style="visibility:hidden">Click here</span>
+          <span class="bet-zone-amount" id="bet-amount-tie"></span>
+        </div>
+        <div class="bet-zone" id="bet-banker">
+          <span class="bet-zone-label">Banker</span>
+          <span class="bet-zone-odds">0.95 to 1</span>
+          <span class="bet-zone-prompt" id="bet-prompt-banker" style="visibility:hidden">Click here</span>
+          <span class="bet-zone-amount" id="bet-amount-banker"></span>
+        </div>
+      </div>
+      <div class="control-bar">
+        <div class="ctrl-item">
+          <span class="ctrl-label">Balance</span>
+          <span class="ctrl-value" id="balance-display">$10,000</span>
+        </div>
+        <div class="chip-row" id="chip-row"></div>
+        <div class="ctrl-item">
+          <span class="ctrl-label">Wager</span>
+          <span class="ctrl-value" id="wager-display">$0</span>
+        </div>
+        <button id="deal" class="ctrl-btn" disabled>Deal</button>
+        <button id="clear-btn" class="ctrl-btn" style="visibility:hidden">Clear</button>
       </div>
       <div class="scoreboard">
         <div class="row pred-row">
