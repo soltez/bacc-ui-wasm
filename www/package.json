@@ -10,8 +10,8 @@
   "keywords": [],
   "license": "LGPL-3.0-only",
   "dependencies": {
+    "bacc-ts": "^1.0.0",
     "bacc-ui-wasm": "file:../pkg",
-    "baccarat-engine": "^1.0.0",
     "peel.js": "^1.0.1"
   },
   "devDependencies": {
