@@ -123,9 +123,10 @@ blue = chaotic, empty = insufficient data (fewer than 2 big road columns).
 
 ## Using a bacc-rs server as the data source
 
-The `GameSource` class from [bacc-ts](https://github.com/soltez/bacc-ts)
-abstracts over local and remote data. To switch from the bacc-ts local engine
-to a running [bacc-server](https://github.com/soltez/bacc-server) instance:
+The `GameSource` class (defined in `www/api.ts`, wrapping
+[bacc-ts](https://github.com/soltez/bacc-ts) internals) abstracts over local
+and remote data. To switch from the bacc-ts local engine to a running
+[bacc-server](https://github.com/soltez/bacc-server) instance:
 
 ```diff
 -const source = new GameSource()

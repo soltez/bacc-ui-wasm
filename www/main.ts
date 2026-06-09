@@ -1,4 +1,4 @@
-import { GameSource, renderScoreboard, ScoreboardJson, Round } from "./bacc/api"
+import { GameSource, renderScoreboard, ScoreboardJson, Round } from "./api"
 import { render_card, render_prediction } from "./wasm"
 import { Peel } from "peel.js"
 
