@@ -121,12 +121,13 @@ blue = chaotic, empty = insufficient data (fewer than 2 big road columns).
 
 ---
 
-## Using a bacc-rs server as the data source
+## Using a bacc-server as the data source
 
 The `GameSource` class (defined in `www/api.ts`, wrapping
 [bacc-ts](https://github.com/soltez/bacc-ts) internals) abstracts over local
 and remote data. To switch from the bacc-ts local engine to a running
-[bacc-server](https://github.com/soltez/bacc-server) instance:
+[bacc-server](https://github.com/soltez/bacc-server) instance, change the
+`GameSource` constructor call in `www/main.ts`:
 
 ```diff
 -const source = new GameSource()
@@ -167,6 +168,6 @@ cargo build --release
 }
 ```
 
-Card integers use the Cactus Kev u32 encoding. The webpack dev server proxies
-`/round` and `/scoreboard` to `http://localhost:3000`, so no CORS configuration
-is needed during development.
+Card integers use the Cactus Kev u32 encoding. bacc-server must be built with
+CORS enabled (`tower-http` with `CorsLayer::permissive()`) to allow requests
+from the webpack dev server at `http://localhost:8080`.
