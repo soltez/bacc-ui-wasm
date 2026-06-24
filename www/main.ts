@@ -1,5 +1,5 @@
-import { GameSource, renderScoreboard, ScoreboardJson, Round } from "./api"
-import { render_card, render_prediction } from "./wasm"
+import { GameSource, Round } from "./api"
+import { render_bead_plate, render_big_road, render_derived_road, render_prediction, render_card } from "./wasm"
 import { Peel } from "peel.js"
 
 const DERIVED_IDS = ["big-eye-boy", "small-road", "cockroach-pig"]
@@ -212,19 +212,14 @@ function renderTable(round: Round, onAllRevealed: () => void): void {
   renderInitialCards(bankerCardsEl, round.bankerCards, onInitialReveal)
 }
 
-function render(scoreboard: ScoreboardJson): void {
-  const svgs = renderScoreboard(scoreboard)
-  document.getElementById("bead-plate")!.innerHTML = svgs.beadPlate
-  document.getElementById("big-road")!.innerHTML = svgs.bigRoad
+function render(): void {
+  document.getElementById("bead-plate")!.innerHTML = render_bead_plate(15)
+  document.getElementById("big-road")!.innerHTML   = render_big_road(30)
   for (let i = 0; i < DERIVED_IDS.length; i++) {
     const el = document.getElementById(DERIVED_IDS[i])
-    if (el) el.innerHTML = svgs.derivedRoads[i]
+    if (el) el.innerHTML = render_derived_road(24, i)
   }
-}
-
-function renderPrediction(bigRoadHex: string | null): void {
-  const el = document.getElementById("prediction")!
-  el.innerHTML = bigRoadHex ? render_prediction(bigRoadHex, false) : ""
+  document.getElementById("prediction")!.innerHTML = render_prediction(false)
 }
 
 async function nextHand(): Promise<void> {
@@ -236,15 +231,13 @@ async function nextHand(): Promise<void> {
   renderTable(round, async () => {
     document.getElementById("player-value")!.textContent = String(round.playerValue)
     document.getElementById("banker-value")!.textContent = String(round.bankerValue)
-    const scoreboard = await source.getScoreboard()
-    render(scoreboard)
-    renderPrediction(scoreboard.big_road)
+    await source.syncScoreboard()
+    render()
     dealing = false
     settle(round.playerValue, round.bankerValue)
   })
 }
 
-render({ bead_plate: "0", big_road: "0", derived_roads: ["0", "0", "0"] })
-renderPrediction("0")
+render()
 initBettingUI()
 document.getElementById("deal")!.addEventListener("click", nextHand)

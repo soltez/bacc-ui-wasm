@@ -3,19 +3,7 @@ import {
     BaccaratScoreboard,
     type BaccaratRound,
 } from "bacc-ts"
-import { render_bead_plate, render_big_road, render_derived_road } from "./wasm"
-
-export interface ScoreboardSvg {
-    beadPlate: string
-    bigRoad: string
-    derivedRoads: [string, string, string]
-}
-
-export interface ScoreboardJson {
-    bead_plate: string
-    big_road: string
-    derived_roads: [string, string, string]
-}
+import { update_scoreboard } from "./wasm"
 
 export interface Round {
     outcome: "player" | "banker" | "tie"
@@ -40,14 +28,6 @@ export interface RoundJson {
     banker_cards: number[]
 }
 
-function toScoreboardJson(sb: BaccaratScoreboard): ScoreboardJson {
-    const [d0, d1, d2] = sb.derivedRoads()
-    return {
-        bead_plate: sb.beadPlate().toString(16),
-        big_road:   sb.bigRoad().toString(16),
-        derived_roads: [d0.toString(16), d1.toString(16), d2.toString(16)],
-    }
-}
 
 function roundFromBaccaratRound(r: BaccaratRound): Round {
     const enc = r.encode()
@@ -79,7 +59,7 @@ export class GameSource {
 
     constructor(private baseUrl?: string) {
         if (!baseUrl) {
-            this.shoe       = BaccaratShoe.new(8, 3, 0.965)
+            this.shoe = BaccaratShoe.new(8, 3, 0.965)
             this.scoreboard = new BaccaratScoreboard()
         }
     }
@@ -99,24 +79,15 @@ export class GameSource {
         return roundFromJson(await res.json() as RoundJson)
     }
 
-    async getScoreboard(): Promise<ScoreboardJson> {
+    async syncScoreboard(): Promise<void> {
         if (!this.baseUrl) {
-            return toScoreboardJson(this.scoreboard!)
+            const hex = this.scoreboard!.beadPlate().toString(16)
+            update_scoreboard(hex.length % 2 === 1 ? "0" + hex : hex)
+            return
         }
         const res = await fetch(`${this.baseUrl}/scoreboard`)
-        return res.json() as Promise<ScoreboardJson>
-    }
-}
-
-export function renderScoreboard(json: ScoreboardJson): ScoreboardSvg {
-    return {
-        beadPlate: render_bead_plate(15, json.bead_plate),
-        bigRoad:   render_big_road(30, json.big_road),
-        derivedRoads: [
-            render_derived_road(24, 0, json.derived_roads[0]),
-            render_derived_road(24, 1, json.derived_roads[1]),
-            render_derived_road(24, 2, json.derived_roads[2]),
-        ],
+        const json = await res.json() as { bead_plate: string }
+        update_scoreboard(json.bead_plate)
     }
 }
 

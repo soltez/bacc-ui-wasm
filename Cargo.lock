@@ -18,6 +18,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayvec"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f02882884d3e1bc524fb12c79f107f6ad0e1cfd498c536ffb494301740995dfe"
+
+[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -35,9 +41,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "bacc-core-rs"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4467097ecae6bafa562a8b45264609f250724d5d15c8578bae5eefd52cb489a7"
+dependencies = [
+ "arrayvec",
+ "kev-rs",
+]
+
+[[package]]
 name = "bacc-ui-wasm"
 version = "0.1.0"
 dependencies = [
+ "bacc-core-rs",
  "console_error_panic_hook",
  "flate2",
  "rstest",
@@ -195,6 +212,12 @@ dependencies = [
  "once_cell",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "kev-rs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d7cbf6ac4ebe6c6d499c71553f3d5aa94a0771fc1add1845d22d628422eef2"
 
 [[package]]
 name = "libm"
