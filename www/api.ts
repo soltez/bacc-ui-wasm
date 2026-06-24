@@ -1,7 +1,9 @@
 import {
     BaccaratShoe,
     BaccaratScoreboard,
-    type BaccaratRound,
+    type CardInt,
+    rankOf,
+    makeCard,
 } from "bacc-ts"
 import { update_scoreboard } from "./wasm"
 
@@ -21,37 +23,24 @@ export interface Round {
 }
 
 export interface RoundJson {
-    encoded: number
-    is_forced_third: boolean
-    cut_card_index: number | null
-    player_cards: number[]
-    banker_cards: number[]
+    encoded_hex: string
 }
 
 
-function roundFromBaccaratRound(r: BaccaratRound): Round {
-    const enc = r.encode()
-    const outcomeCode = enc & 0x3
-    const playerValue = (enc >>> 8) & 0xf
-    const bankerValue = (enc >>> 12) & 0xf
-    const outcome: Round["outcome"] =
-        outcomeCode === 1 ? "player" :
-        outcomeCode === 2 ? "banker" : "tie"
-    return {
-        outcome,
-        playerValue,
-        bankerValue,
-        winnerValue: outcome === "banker" ? bankerValue : playerValue,
-        playerPair:      (enc & 0x04) !== 0,
-        bankerPair:      (enc & 0x08) !== 0,
-        playerDrewThird: (enc & 0x10) !== 0,
-        bankerDrewThird: (enc & 0x20) !== 0,
-        isForcedThird:   r.isForcedThird(),
-        cutCardIndex:    r.cutCardIndex(),
-        playerCards:  [...r.playerCards()],
-        bankerCards:  [...r.bankerCards()],
-    }
+function baccaratValue(card: CardInt): number {
+    const rank = rankOf(card)
+    return rank <= 7 ? rank + 2 : rank === 12 ? 1 : 0
 }
+
+function handValue(cards: readonly CardInt[]): number {
+    return cards.reduce((sum, c) => sum + baccaratValue(c), 0) % 10
+}
+
+function u8ToCard(b: number): CardInt {
+    return makeCard(b & 0xf, (b >> 4) & 0xf)
+}
+
+
 
 export class GameSource {
     private shoe?: BaccaratShoe
@@ -73,7 +62,7 @@ export class GameSource {
                 raw = this.shoe.next()!
             }
             this.scoreboard!.update(raw)
-            return roundFromBaccaratRound(raw)
+            return roundFromJson({ encoded_hex: raw.encode() })
         }
         const res = await fetch(`${this.baseUrl}/round/next`, { method: "POST" })
         return roundFromJson(await res.json() as RoundJson)
@@ -81,56 +70,47 @@ export class GameSource {
 
     async syncScoreboard(): Promise<void> {
         if (!this.baseUrl) {
-            const hex = this.scoreboard!.beadPlate().toString(16)
-            update_scoreboard(hex.length % 2 === 1 ? "0" + hex : hex)
+            update_scoreboard(this.scoreboard!.encode())
             return
         }
         const res = await fetch(`${this.baseUrl}/scoreboard`)
-        const json = await res.json() as { bead_plate: string }
-        update_scoreboard(json.bead_plate)
+        const json = await res.json() as { encoded_hex: string }
+        update_scoreboard(json.encoded_hex)
     }
 }
 
-export function roundToJson(round: Round): RoundJson {
-    const outcome = round.outcome === "player" ? 1 :
-                    round.outcome === "banker" ? 2 : 3
-    const encoded =
-        outcome |
-        (round.playerPair      ? 0x04 : 0) |
-        (round.bankerPair      ? 0x08 : 0) |
-        (round.playerDrewThird ? 0x10 : 0) |
-        (round.bankerDrewThird ? 0x20 : 0) |
-        (round.playerValue << 8) |
-        (round.bankerValue << 12)
-    return {
-        encoded,
-        is_forced_third: round.isForcedThird,
-        cut_card_index:  round.cutCardIndex,
-        player_cards:    round.playerCards,
-        banker_cards:    round.bankerCards,
-    }
-}
 
 export function roundFromJson(json: RoundJson): Round {
-    const enc = json.encoded
-    const outcomeCode = enc & 0x3
-    const playerValue = (enc >>> 8) & 0xf
-    const bankerValue = (enc >>> 12) & 0xf
+    const n = BigInt("0x" + json.encoded_hex)
+    const auxNib = Number((n >> 48n) & 0xffn)
+    const isForcedThird = (auxNib & 0x08) !== 0
+    const cutRaw = auxNib & 0x07
+    const cutCardIndex = cutRaw === 0 ? null : cutRaw - 1
+    const p0 = u8ToCard(Number(n & 0xffn))
+    const b0 = u8ToCard(Number((n >> 8n) & 0xffn))
+    const p1 = u8ToCard(Number((n >> 16n) & 0xffn))
+    const b1 = u8ToCard(Number((n >> 24n) & 0xffn))
+    const p2raw = Number((n >> 32n) & 0xffn)
+    const b2raw = Number((n >> 40n) & 0xffn)
+    const playerCards: CardInt[] = p2raw ? [p0, p1, u8ToCard(p2raw)] : [p0, p1]
+    const bankerCards: CardInt[] = b2raw ? [b0, b1, u8ToCard(b2raw)] : [b0, b1]
+    const playerValue = handValue(playerCards)
+    const bankerValue = handValue(bankerCards)
     const outcome: Round["outcome"] =
-        outcomeCode === 1 ? "player" :
-        outcomeCode === 2 ? "banker" : "tie"
+        playerValue > bankerValue ? "player" :
+        bankerValue > playerValue ? "banker" : "tie"
     return {
         outcome,
         playerValue,
         bankerValue,
         winnerValue: outcome === "banker" ? bankerValue : playerValue,
-        playerPair:      (enc & 0x04) !== 0,
-        bankerPair:      (enc & 0x08) !== 0,
-        playerDrewThird: (enc & 0x10) !== 0,
-        bankerDrewThird: (enc & 0x20) !== 0,
-        isForcedThird:   json.is_forced_third,
-        cutCardIndex:    json.cut_card_index,
-        playerCards:     json.player_cards,
-        bankerCards:     json.banker_cards,
+        playerPair:      rankOf(p0) === rankOf(p1),
+        bankerPair:      rankOf(b0) === rankOf(b1),
+        playerDrewThird: p2raw !== 0,
+        bankerDrewThird: b2raw !== 0,
+        isForcedThird,
+        cutCardIndex,
+        playerCards,
+        bankerCards,
     }
 }

@@ -10,7 +10,7 @@
   "keywords": [],
   "license": "LGPL-3.0-only",
   "dependencies": {
-    "bacc-ts": "^1.0.0",
+    "bacc-ts": "^2.0.0",
     "bacc-ui-wasm": "file:../pkg",
     "peel.js": "^1.0.1"
   },
