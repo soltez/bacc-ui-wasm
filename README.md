@@ -8,11 +8,10 @@ The crate exposes three categories of building blocks:
 - **Card renderer** -- generates a standalone SVG for any playing card or card
   back, given a Cactus Kev u32 card integer.
 - **Road renderers** -- generate standalone SVGs for the bead plate, big road,
-  and the three derived roads (big eye boy, small road, cockroach pig), given
-  hex-encoded road strings in the bacc-rs format.
+  and the three derived roads (big eye boy, small road, cockroach pig). Road
+  state is held in a module-level singleton updated via `update_scoreboard`.
 - **Prediction renderer** -- generates a standalone SVG showing derived road
-  prediction icons for the next player and banker outcomes, given the big road
-  hex string.
+  prediction icons for the next player and banker outcomes.
 
 The `www/` directory contains a reference frontend that wires these primitives
 to a game source, using [bacc-ts](https://github.com/soltez/bacc-ts) as the
@@ -81,29 +80,37 @@ Returns a standalone SVG string for the given card.
   that neither the suit nor the rank is revealed as the corner or side is
   gradually exposed.
 
+### Scoreboard state
+
+```ts
+update_scoreboard(hex: string): void
+```
+
+Updates the module-level scoreboard singleton from a hex-encoded bead plate
+string (bacc-core-rs format). Applies new bead words incrementally when `hex`
+extends the current state; reconstructs from scratch on gap or reset.
+
 ### Road rendering
 
 ```ts
-render_bead_plate(cols: number, hex: string): string
-render_big_road(cols: number, hex: string): string
-render_derived_road(cols: number, icon: number, hex: string): string
+render_bead_plate(cols: number): string
+render_big_road(cols: number): string
+render_derived_road(cols: number, idx: number): string
 ```
 
-Each returns a standalone SVG string sized to `cols * 24 x 6 * 24` pixels.
+Each returns a standalone SVG string sized to `cols * 24 x 6 * 24` pixels,
+reading from the singleton updated by `update_scoreboard`.
 
-- `hex` -- bacc-rs BigUint hex string (MSB = oldest entry, LSB = newest)
-- `icon` -- derived road selector: `0`=big eye boy, `1`=small road, `2`=cockroach pig
+- `idx` -- derived road selector: `0`=big eye boy, `1`=small road, `2`=cockroach pig
 
 ### Prediction rendering
 
 ```ts
-render_prediction(big_road_hex: string, vertical: boolean): string
+render_prediction(vertical: boolean): string
 ```
 
-Returns a standalone SVG showing derived road prediction icons for the next outcome.
-
-- `big_road_hex` -- same big road hex string passed to `render_big_road`
-- `vertical` -- controls layout orientation (see below)
+Returns a standalone SVG showing derived road prediction icons for the next
+outcome, reading from the singleton updated by `update_scoreboard`.
 
 **Horizontal layout** (`vertical=false`): 4 cols x 2 rows (`4*24 x 2*24` px).
 
@@ -150,24 +157,24 @@ cargo build --release
 
 ```json
 {
-  "encoded":         123456,
-  "is_forced_third": false,
-  "cut_card_index":  null,
-  "player_cards":    [268471337, 134253349],
-  "banker_cards":    [67115551, 268454953]
+  "encoded_hex": "<hex>"
 }
 ```
 
-`GET /scoreboard` -- returns the current road state:
+`GET /scoreboard` -- returns the current bead plate state:
 
 ```json
 {
-  "bead_plate":    "<hex>",
-  "big_road":      "<hex>",
-  "derived_roads": ["<hex>", "<hex>", "<hex>"]
+  "encoded_hex": "<hex>"
 }
 ```
 
-Card integers use the Cactus Kev u32 encoding. bacc-server must be built with
-CORS enabled (`tower-http` with `CorsLayer::permissive()`) to allow requests
-from the webpack dev server at `http://localhost:8080`.
+Both values use the bacc-core-rs hex encoding. `encoded_hex` in the round
+response is a 16-character hex string encoding the full card sequence and
+metadata as a big-endian u64. `encoded_hex` in the scoreboard response is a
+variable-length hex string of packed bead words (4 hex chars per round,
+oldest first), compatible with `update_scoreboard`.
+
+bacc-server must be built with CORS enabled (`tower-http` with
+`CorsLayer::permissive()`) to allow requests from the webpack dev server at
+`http://localhost:8080`.
